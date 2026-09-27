@@ -74,12 +74,23 @@ export function sameChicagoDay(iso: string | null, day: string): boolean {
   return chicagoDate(parsed) === day;
 }
 
+/** Clock time in America/Chicago with a CT suffix, e.g. "2:14 PM CT". */
 export function formatChicagoTime(iso: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  const clock = new Intl.DateTimeFormat("en-US", {
     timeZone: CHICAGO,
     hour: "numeric",
     minute: "2-digit",
-    timeZoneName: "short",
+  }).format(new Date(iso));
+  return `${clock} CT`;
+}
+
+/** Festival day label, e.g. "Friday, Oct 2". */
+export function formatFestivalDay(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CHICAGO,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
   }).format(new Date(iso));
 }
 

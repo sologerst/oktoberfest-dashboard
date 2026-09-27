@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chicagoDate, chicagoDayBounds, sameChicagoDay, snapshotNeedsRefresh } from "@/lib/time";
+import {
+  chicagoDate,
+  chicagoDayBounds,
+  formatChicagoTime,
+  formatFestivalDay,
+  sameChicagoDay,
+  snapshotNeedsRefresh,
+} from "@/lib/time";
 
 describe("Chicago time", () => {
   it("uses CDT in October", () => {
@@ -25,6 +32,11 @@ describe("Chicago time", () => {
     expect(snapshotNeedsRefresh(null, now)).toBe(true);
     expect(snapshotNeedsRefresh("2026-10-03T17:59:00.000Z", now)).toBe(true);
     expect(snapshotNeedsRefresh("2026-10-03T17:59:30.000Z", now)).toBe(false);
+  });
+
+  it("formats clock time with a CT suffix and a short festival day", () => {
+    expect(formatChicagoTime("2026-10-02T19:14:00.000Z")).toBe("2:14 PM CT");
+    expect(formatFestivalDay("2026-10-02T19:14:00.000Z")).toBe("Friday, Oct 2");
   });
 
   it("matches a timestamp to its Chicago day", () => {
