@@ -30,7 +30,7 @@ Fill `config/pos-categories.yaml` with Square location ids and catalog object id
 
 `npm run dev` serves the waiting screen with no credentials. `DASHBOARD_SAMPLE=1` shows sample numbers locally and is ignored in production.
 
-`vercel.json` schedules a backup refresh once a day (`0 17 * * *`, noon America/Chicago during daylight time). Hobby plans reject a cron that runs more often, and that rejection fails the deployment. While the screen is open it still refreshes a snapshot older than 60 seconds. On a Pro plan, change the schedule to `* * * * *`.
+`vercel.json` pins the Next.js framework and clears a static output directory. These Vercel projects were created when the repo was only the handoff markdown, so a static preset looks for a `public` folder this app does not have and fails the deployment before `next build`. The same file schedules a backup refresh once a day (`0 17 * * *`, noon America/Chicago during daylight time). Hobby plans reject a cron that runs more often, and that rejection fails the deployment. While the screen is open it still refreshes a snapshot older than 60 seconds. On a Pro plan, change the schedule to `* * * * *`.
 
 ## Checks
 
