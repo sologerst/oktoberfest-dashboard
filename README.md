@@ -30,7 +30,7 @@ Fill `config/pos-categories.yaml` with Square location ids and catalog object id
 
 `npm run dev` serves the waiting screen with no credentials. `DASHBOARD_SAMPLE=1` shows sample numbers locally and is ignored in production.
 
-`vercel.json` runs that same refresh every minute. The open screen also refreshes a snapshot older than 60 seconds, so a missed cron still catches up. A per-minute cron requires a Vercel plan that allows it.
+`vercel.json` schedules a backup refresh once a day (`0 17 * * *`, noon America/Chicago during daylight time). Hobby plans reject a cron that runs more often, and that rejection fails the deployment. While the screen is open it still refreshes a snapshot older than 60 seconds. On a Pro plan, change the schedule to `* * * * *`.
 
 ## Checks
 
