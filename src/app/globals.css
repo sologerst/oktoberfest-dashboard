@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --background: #101820;
+  --foreground: #f4efe4;
+  --muted: #b7c0c7;
+  --card: #1a2832;
+  --line: rgba(244, 239, 228, 0.12);
+  --gold: #e2b15a;
+  --stale: #e0a15a;
+  --danger: #e07a68;
+  --good: #8fceb0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-gold: var(--gold);
+  --color-stale: var(--stale);
+  --color-danger: var(--danger);
+  --color-good: var(--good);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(226, 177, 90, 0.16), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
