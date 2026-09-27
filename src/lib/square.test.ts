@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chicagoDayBounds } from "@/lib/time";
-import type { PosConfig } from "@/lib/pos-config";
+import type { PosCardConfig, PosConfig } from "@/lib/pos-config";
 import {
   expandedMembership,
   foldOrders,
@@ -8,17 +8,25 @@ import {
   totalsFromState,
   type CardAttempt,
 } from "@/lib/square";
-import type { CardId } from "@/lib/types";
+import type { CardId, SquareState } from "@/lib/types";
 
 const bounds = chicagoDayBounds("2026-10-03");
 
-function config(overrides: Partial<Record<CardId, Partial<PosConfig[CardId]>>> = {}): PosConfig {
-  const blank = { locationIds: [] as string[], catalogObjectIds: [] as string[], categoryIds: [] as string[] };
+function blank(id: string, label: string): PosCardConfig {
+  return { id, label, locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: [] };
+}
+
+function config(overrides: Partial<Record<string, Partial<PosCardConfig>>> = {}): PosConfig {
   return {
-    beer: { ...blank, ...overrides.beer },
-    merch: { ...blank, ...overrides.merch },
-    food: { ...blank, ...overrides.food },
+    cards: (["beer", "merch", "food"] as const).map((id) => ({
+      ...blank(id, id[0]!.toUpperCase() + id.slice(1)),
+      ...overrides[id],
+    })),
   };
+}
+
+function totals(state: SquareState, failed = new Set<CardId>()) {
+  return totalsFromState(state, ["beer", "merch", "food"], failed);
 }
 
 describe("Square card totals", () => {
@@ -52,7 +60,7 @@ describe("Square card totals", () => {
       bounds,
       membership,
     });
-    expect(totalsFromState(second, new Set()).beer).toEqual({ cents: 700, quantity: 1 });
+    expect(totals(second).beer).toEqual({ cents: 700, quantity: 1 });
     expect(second.updatedSince).toBe("2026-10-03T19:00:00.000Z");
 
     const nextDay = foldOrders({
@@ -86,7 +94,7 @@ describe("Square card totals", () => {
       bounds,
       membership,
     });
-    expect(totalsFromState(state, new Set()).food).toEqual({ cents: 750, quantity: null });
+    expect(totals(state).food).toEqual({ cents: 750, quantity: null });
   });
 
   it("searches closed orders for the day, then updates since the cursor", async () => {

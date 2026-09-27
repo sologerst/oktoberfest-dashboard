@@ -1,6 +1,6 @@
 import { chicagoDate, chicagoDayBounds } from "@/lib/time";
-import { cardReadiness, invalidCardMessage, type PosConfig } from "@/lib/pos-config";
-import { CARD_IDS, type CardId, type SquareOrderContribution, type SquareState } from "@/lib/types";
+import { cardReadiness, invalidCardMessage, posFingerprint, type PosConfig } from "@/lib/pos-config";
+import type { CardId, SquareOrderContribution, SquareState } from "@/lib/types";
 
 const SQUARE_VERSION = "2026-08-19";
 const PAGE_LIMIT = 40;
@@ -68,18 +68,20 @@ export function expandedMembership(
   failed: Set<CardId>;
 } {
   const idsByCard = new Map<CardId, Set<string>>();
-  for (const card of CARD_IDS) {
+  for (const card of config.cards) {
+    if (card.rollsUp.length > 0) continue;
     idsByCard.set(
-      card,
-      new Set([...config[card].catalogObjectIds, ...categoryObjects[card]]),
+      card.id,
+      new Set([...card.catalogObjectIds, ...(categoryObjects[card.id] ?? [])]),
     );
   }
 
   const owners = new Map<string, CardId[]>();
-  for (const card of CARD_IDS) {
-    for (const id of idsByCard.get(card) ?? []) {
+  for (const card of config.cards) {
+    if (card.rollsUp.length > 0) continue;
+    for (const id of idsByCard.get(card.id) ?? []) {
       const list = owners.get(id) ?? [];
-      list.push(card);
+      list.push(card.id);
       owners.set(id, list);
     }
   }
@@ -182,27 +184,30 @@ export function foldOrders(input: {
 
 export function totalsFromState(
   state: SquareState,
+  cardIds: CardId[],
   failed: Set<CardId>,
 ): Record<CardId, { cents: number; quantity: number | null }> {
   const totals = {} as Record<CardId, { cents: number; quantity: number; known: boolean }>;
-  for (const card of CARD_IDS) totals[card] = { cents: 0, quantity: 0, known: true };
+  for (const card of cardIds) totals[card] = { cents: 0, quantity: 0, known: true };
 
   for (const order of Object.values(state.orders)) {
-    for (const card of CARD_IDS) {
+    for (const card of cardIds) {
       const contribution = order.cards[card];
       if (!contribution || failed.has(card)) continue;
       const total = totals[card];
+      if (!total) continue;
       total.cents += contribution.cents;
       total.quantity += contribution.quantity;
       total.known = total.known && contribution.quantityKnown;
     }
   }
 
-  return {
-    beer: { cents: totals.beer.cents, quantity: totals.beer.known ? totals.beer.quantity : null },
-    merch: { cents: totals.merch.cents, quantity: totals.merch.known ? totals.merch.quantity : null },
-    food: { cents: totals.food.cents, quantity: totals.food.known ? totals.food.quantity : null },
-  };
+  const result = {} as Record<CardId, { cents: number; quantity: number | null }>;
+  for (const card of cardIds) {
+    const total = totals[card];
+    result[card] = { cents: total?.cents ?? 0, quantity: total?.known ? total.quantity : null };
+  }
+  return result;
 }
 
 type SquareClient = {
@@ -313,10 +318,14 @@ async function searchOrders(
   return orders;
 }
 
+function squareCards(config: PosConfig): CardId[] {
+  return config.cards.filter((card) => card.rollsUp.length === 0).map((card) => card.id);
+}
+
 function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType<typeof totalsFromState> | null, error: string | null): Record<CardId, CardAttempt> {
   const readiness = cardReadiness(config);
   const cards = {} as Record<CardId, CardAttempt>;
-  for (const card of CARD_IDS) {
+  for (const card of squareCards(config)) {
     if (readiness[card] === "unconfigured") {
       cards[card] = unconfiguredCard();
       continue;
@@ -335,8 +344,8 @@ function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType
     }
     cards[card] = {
       status: "ok",
-      cents: totals[card].cents,
-      quantity: totals[card].quantity,
+      cents: totals[card]?.cents ?? 0,
+      quantity: totals[card]?.quantity ?? null,
       error: null,
     };
   }
@@ -352,7 +361,8 @@ export async function pullPos(input: {
   fetchImpl?: typeof fetch;
 }): Promise<PosPull> {
   const readiness = cardReadiness(input.config);
-  const ready = CARD_IDS.filter((card) => readiness[card] === "ready");
+  const squareIds = squareCards(input.config);
+  const ready = input.config.cards.filter((card) => readiness[card.id] === "ready");
   if (ready.length === 0) {
     return { cards: attemptsFrom(input.config, new Set(), null, null), state: input.state };
   }
@@ -363,19 +373,22 @@ export async function pullPos(input: {
   const client = clientFor(fetchImpl, squareOrigin(input.environment), input.token);
   const day = chicagoDate(input.now);
   const bounds = chicagoDayBounds(day);
+  const fingerprint = posFingerprint(input.config);
   const categoryObjects = {} as Record<CardId, string[]>;
-  for (const card of CARD_IDS) {
-    categoryObjects[card] =
-      readiness[card] === "ready" ? await expandCategory(client, input.config[card].categoryIds) : [];
+  for (const card of input.config.cards) {
+    categoryObjects[card.id] =
+      readiness[card.id] === "ready" ? await expandCategory(client, card.categoryIds) : [];
   }
 
   const { membership, failed } = expandedMembership(input.config, categoryObjects);
-  const previous = input.state?.chicagoDay === day ? input.state : null;
-  const locationIds = [...new Set(ready.flatMap((card) => input.config[card].locationIds))];
+  const sameConfig = input.state?.configFingerprint === fingerprint;
+  const previous = input.state?.chicagoDay === day && sameConfig ? input.state : null;
+  const locationIds = [...new Set(ready.flatMap((card) => card.locationIds))];
   const incoming = await searchOrders(client, locationIds, bounds, previous?.updatedSince ?? null);
   const state = foldOrders({ previous, incoming, day, bounds, membership });
+  state.configFingerprint = fingerprint;
   return {
-    cards: attemptsFrom(input.config, failed, totalsFromState(state, failed), null),
+    cards: attemptsFrom(input.config, failed, totalsFromState(state, squareIds, failed), null),
     state,
   };
 }

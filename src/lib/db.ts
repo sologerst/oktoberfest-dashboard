@@ -1,5 +1,6 @@
 import pg from "pg";
-import type { StoredSnapshot } from "@/lib/types";
+import { validatePosConfig, type PosConfig } from "@/lib/pos-config";
+import type { DisplayCard, MoneyCard, StoredSnapshot, TicketBoard } from "@/lib/types";
 
 const { Pool } = pg;
 const LOCK_KEY = 8602026;
@@ -10,7 +11,23 @@ const ENSURE_SQL = `
     payload jsonb NOT NULL,
     square_state jsonb,
     updated_at timestamptz NOT NULL DEFAULT now()
-  )
+  );
+  CREATE TABLE IF NOT EXISTS dashboard_pos_config (
+    id integer PRIMARY KEY CHECK (id = 1),
+    cards jsonb NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  ALTER TABLE dashboard_pos_config ENABLE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE dashboard_pos_config FROM PUBLIC;
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      EXECUTE 'REVOKE ALL ON TABLE dashboard_pos_config FROM anon';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      EXECUTE 'REVOKE ALL ON TABLE dashboard_pos_config FROM authenticated';
+    END IF;
+  END $$;
 `;
 
 export function databaseIdentity(connectionString: string): string {
@@ -88,6 +105,54 @@ async function ensureSchema(): Promise<void> {
   await schemaReady;
 }
 
+function asMoney(value: unknown): MoneyCard {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const status = record.status;
+  return {
+    cents: typeof record.cents === "number" ? record.cents : null,
+    quantity: typeof record.quantity === "number" ? record.quantity : null,
+    asOf: typeof record.asOf === "string" ? record.asOf : null,
+    status: status === "ok" || status === "stale" || status === "error" || status === "unconfigured" ? status : "error",
+    error: typeof record.error === "string" ? record.error : null,
+  };
+}
+
+function legacyCards(payload: Record<string, unknown>): DisplayCard[] | null {
+  if (!payload.beer || !payload.merch || !payload.food) return null;
+  return [
+    { id: "beer", label: "Beer", ...asMoney(payload.beer) },
+    { id: "merch", label: "Merch", ...asMoney(payload.merch) },
+    { id: "food", label: "Food", ...asMoney(payload.food) },
+  ];
+}
+
+function asCards(payload: Record<string, unknown>): DisplayCard[] {
+  if (Array.isArray(payload.cards)) {
+    return payload.cards.flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const record = entry as Record<string, unknown>;
+      if (typeof record.id !== "string" || typeof record.label !== "string") return [];
+      return [{ id: record.id, label: record.label, ...asMoney(record) }];
+    });
+  }
+  return legacyCards(payload) ?? [];
+}
+
+function coerceSnapshot(payload: unknown, squareState: unknown): StoredSnapshot | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const tickets = record.tickets;
+  if (!tickets || typeof tickets !== "object") return null;
+  return {
+    public: {
+      generatedAt: typeof record.generatedAt === "string" ? record.generatedAt : new Date(0).toISOString(),
+      tickets: tickets as TicketBoard,
+      cards: asCards(record),
+    },
+    squareState: squareState && typeof squareState === "object" ? (squareState as StoredSnapshot["squareState"]) : null,
+  };
+}
+
 export async function readStoredSnapshot(): Promise<StoredSnapshot | null> {
   await ensureSchema();
   const result = await getDashboardPool().query<{ payload: StoredSnapshot["public"]; square_state: StoredSnapshot["squareState"] }>(
@@ -95,7 +160,7 @@ export async function readStoredSnapshot(): Promise<StoredSnapshot | null> {
   );
   const row = result.rows[0];
   if (!row) return null;
-  return { public: row.payload, squareState: row.square_state };
+  return coerceSnapshot(row.payload, row.square_state);
 }
 
 export async function writeStoredSnapshot(snapshot: StoredSnapshot): Promise<void> {
@@ -110,6 +175,30 @@ export async function writeStoredSnapshot(snapshot: StoredSnapshot): Promise<voi
           updated_at = now()
     `,
     [JSON.stringify(snapshot.public), JSON.stringify(snapshot.squareState)],
+  );
+}
+
+export async function readPosConfig(): Promise<PosConfig | null> {
+  await ensureSchema();
+  const result = await getDashboardPool().query<{ cards: unknown }>(
+    "SELECT cards FROM dashboard_pos_config WHERE id = 1",
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return validatePosConfig(row.cards);
+}
+
+export async function writePosConfig(config: PosConfig): Promise<void> {
+  await ensureSchema();
+  await getDashboardPool().query(
+    `
+      INSERT INTO dashboard_pos_config (id, cards, updated_at)
+      VALUES (1, $1::jsonb, now())
+      ON CONFLICT (id) DO UPDATE
+      SET cards = EXCLUDED.cards,
+          updated_at = now()
+    `,
+    [JSON.stringify(config.cards)],
   );
 }
 

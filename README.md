@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local`.
 | `DASHBOARD_BASIC_AUTH_USER` / `DASHBOARD_BASIC_AUTH_PASSWORD` | Gate for the TV and office screen. Production stays locked until both are set. |
 | `CRON_SECRET` | Vercel sends `Authorization: Bearer <CRON_SECRET>` to `/api/cron/refresh`. |
 
-Fill `config/pos-categories.yaml` with Square location ids and catalog object ids or category ids. An item listed on two cards is a config error: those cards stop updating instead of double-counting. Leave a card empty until its ids are known.
+Open **Card setup** on the signed-in sales screen to map Square. Each card takes a location id plus item or category ids, or it adds other cards together. Use one card per alcohol booth, then an Alcohol card that checks those booths. The same location can be on more than one card. An item listed on two cards stops those cards instead of counting the sale twice. `config/pos-categories.yaml` is only the fallback before the first save.
 
 `npm run dev` serves the waiting screen with no credentials. `DASHBOARD_SAMPLE=1` shows sample numbers locally and is ignored in production.
 

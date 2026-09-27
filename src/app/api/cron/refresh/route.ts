@@ -15,21 +15,18 @@ export async function GET(request: Request) {
       return Response.json({ ok: true, skipped: true });
     }
     const snapshot = result.snapshot.public;
+    const cards = snapshot.cards.map((card) => ({ id: card.id, status: card.status }));
     console.info("Sales snapshot refreshed", {
       generatedAt: snapshot.generatedAt,
       tickets: snapshot.tickets.status,
-      beer: snapshot.beer.status,
-      merch: snapshot.merch.status,
-      food: snapshot.food.status,
+      cards,
     });
     return Response.json({
       ok: true,
       skipped: false,
       generatedAt: snapshot.generatedAt,
       tickets: snapshot.tickets.status,
-      beer: snapshot.beer.status,
-      merch: snapshot.merch.status,
-      food: snapshot.food.status,
+      cards,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Refresh failed";

@@ -1,8 +1,6 @@
 export type SourceStatus = "ok" | "stale" | "error" | "unconfigured";
 
-export type CardId = "beer" | "merch" | "food";
-
-export const CARD_IDS: CardId[] = ["beer", "merch", "food"];
+export type CardId = string;
 
 export type MoneyCard = {
   cents: number | null;
@@ -10,6 +8,11 @@ export type MoneyCard = {
   asOf: string | null;
   status: SourceStatus;
   error: string | null;
+};
+
+export type DisplayCard = MoneyCard & {
+  id: CardId;
+  label: string;
 };
 
 export type DayLine = {
@@ -33,9 +36,7 @@ export type TicketBoard = {
 export type PublicSnapshot = {
   generatedAt: string;
   tickets: TicketBoard;
-  beer: MoneyCard;
-  merch: MoneyCard;
-  food: MoneyCard;
+  cards: DisplayCard[];
 };
 
 /** Per-order POS contributions for the current Chicago day. Not sent to the browser. */
@@ -48,6 +49,7 @@ export type SquareState = {
   chicagoDay: string;
   updatedSince: string | null;
   orders: Record<string, SquareOrderContribution>;
+  configFingerprint?: string;
 };
 
 export type StoredSnapshot = {
