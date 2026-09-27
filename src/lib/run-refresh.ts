@@ -1,5 +1,5 @@
-import { getFestivalPool, withDashboardLock, readStoredSnapshot, writeStoredSnapshot } from "@/lib/db";
-import { loadPosConfig, type PosConfig } from "@/lib/pos-config";
+import { getFestivalPool, readPosConfig, withDashboardLock, readStoredSnapshot, writeStoredSnapshot } from "@/lib/db";
+import { loadPosConfig, type PosCardConfig, type PosConfig } from "@/lib/pos-config";
 import { buildSnapshot } from "@/lib/refresh";
 import { pullPos } from "@/lib/square";
 import { chicagoDate } from "@/lib/time";
@@ -7,21 +7,34 @@ import { loadTicketNumbers } from "@/lib/tickets";
 import type { StoredSnapshot } from "@/lib/types";
 
 const unreadConfig: PosConfig = {
-  beer: { locationIds: ["unreadable"], catalogObjectIds: [], categoryIds: [] },
-  merch: { locationIds: ["unreadable"], catalogObjectIds: [], categoryIds: [] },
-  food: { locationIds: ["unreadable"], catalogObjectIds: [], categoryIds: [] },
+  cards: (["beer", "merch", "food"] as const).map((id) => ({
+    id,
+    label: id === "beer" ? "Beer" : id === "merch" ? "Merch" : "Food",
+    locationIds: ["unreadable"],
+    catalogObjectIds: [],
+    categoryIds: [],
+    rollsUp: [],
+  })),
 };
+
+async function activeConfig(): Promise<{ config: PosConfig; error: Error | null }> {
+  try {
+    const stored = await readPosConfig();
+    if (stored) return { config: stored, error: null };
+  } catch (error) {
+    return { config: unreadConfig, error: error instanceof Error ? error : new Error("POS config could not be read") };
+  }
+  try {
+    return { config: loadPosConfig(), error: null };
+  } catch (error) {
+    return { config: unreadConfig, error: error instanceof Error ? error : new Error("POS config could not be read") };
+  }
+}
 
 export async function runRefresh(now = new Date()): Promise<{ skipped: true } | { skipped: false; snapshot: StoredSnapshot }> {
   const locked = await withDashboardLock(async () => {
     const previous = await readStoredSnapshot();
-    let config = unreadConfig;
-    let configError: Error | null = null;
-    try {
-      config = loadPosConfig();
-    } catch (error) {
-      configError = error instanceof Error ? error : new Error("POS config could not be read");
-    }
+    const { config, error: configError } = await activeConfig();
 
     const snapshot = await buildSnapshot({
       now,
@@ -45,4 +58,16 @@ export async function runRefresh(now = new Date()): Promise<{ skipped: true } | 
 
   if (locked.skipped) return { skipped: true };
   return { skipped: false, snapshot: locked.result };
+}
+
+export async function loadSetupConfig(): Promise<PosCardConfig[]> {
+  if (process.env.DASHBOARD_DATABASE_URL) {
+    try {
+      const stored = await readPosConfig();
+      if (stored) return stored.cards;
+    } catch (error) {
+      console.error("POS config read failed", error);
+    }
+  }
+  return loadPosConfig().cards;
 }

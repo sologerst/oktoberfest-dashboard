@@ -1,6 +1,7 @@
-# Square POS cards. Fill these after listing locations and the catalog.
-# Ids are configuration, not component code. An item in two lists fails those cards
-# instead of counting the sale twice.
+# Square POS cards. Edit these on the signed-in Card setup page (/setup).
+# That page saves into this app's database. An item in two lists fails those cards
+# instead of counting the sale twice. This file is only the fallback before the
+# first save.
 beer:
   locationIds: []
   catalogObjectIds: []

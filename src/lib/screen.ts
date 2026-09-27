@@ -2,45 +2,44 @@ import { isProductionEnv } from "@/lib/auth";
 import { readStoredSnapshot } from "@/lib/db";
 import { cardReadiness, invalidCardMessage, loadPosConfig, type PosConfig } from "@/lib/pos-config";
 import { emptyMoneyCard, emptyTicketBoard } from "@/lib/refresh";
-import { runRefresh } from "@/lib/run-refresh";
+import { loadSetupConfig, runRefresh } from "@/lib/run-refresh";
 import { sampleSnapshot } from "@/lib/sample-snapshot";
 import { chicagoDate, snapshotNeedsRefresh } from "@/lib/time";
 import { remainingTicketedDates } from "@/lib/tickets";
-import { CARD_IDS, type MoneyCard, type PublicSnapshot, type StoredSnapshot } from "@/lib/types";
+import type { DisplayCard, PublicSnapshot, StoredSnapshot } from "@/lib/types";
 
 function messageOf(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "Could not read the snapshot";
 }
 
-function cardsFromConfig(config: PosConfig | null): Record<"beer" | "merch" | "food", MoneyCard> {
+function cardsFromConfig(config: PosConfig | null): DisplayCard[] {
   if (!config) {
-    return {
-      beer: emptyMoneyCard("error", "POS config could not be read."),
-      merch: emptyMoneyCard("error", "POS config could not be read."),
-      food: emptyMoneyCard("error", "POS config could not be read."),
-    };
+    return [{ id: "pos", label: "On-site sales", ...emptyMoneyCard("error", "POS config could not be read.") }];
   }
   const readiness = cardReadiness(config);
-  const cards = {} as Record<"beer" | "merch" | "food", MoneyCard>;
-  for (const card of CARD_IDS) {
-    if (readiness[card] === "unconfigured") cards[card] = emptyMoneyCard("unconfigured");
-    else if (readiness[card] === "invalid") {
-      cards[card] = emptyMoneyCard("error", invalidCardMessage(config, card));
-    } else cards[card] = emptyMoneyCard("error", "Waiting for the first Square pull.");
-  }
-  return cards;
+  return config.cards.map((card) => {
+    if (card.rollsUp.length > 0) {
+      return { id: card.id, label: card.label, ...emptyMoneyCard("error", "Waiting for the first Square pull.") };
+    }
+    if (readiness[card.id] === "unconfigured") {
+      return { id: card.id, label: card.label, ...emptyMoneyCard("unconfigured") };
+    }
+    if (readiness[card.id] === "invalid") {
+      return { id: card.id, label: card.label, ...emptyMoneyCard("error", invalidCardMessage(config, card.id)) };
+    }
+    return { id: card.id, label: card.label, ...emptyMoneyCard("error", "Waiting for the first Square pull.") };
+  });
 }
 
 export function waitingSnapshot(now: Date, ticketError: string, config: PosConfig | null): PublicSnapshot {
-  const cards = cardsFromConfig(config);
   return {
     generatedAt: now.toISOString(),
     tickets: {
       ...emptyTicketBoard("error", ticketError, []),
       days: remainingTicketedDates(chicagoDate(now)).map((day) => ({ ...day, count: null })),
     },
-    ...cards,
+    cards: cardsFromConfig(config),
   };
 }
 
@@ -66,9 +65,14 @@ export async function loadScreenSnapshot(now = new Date()): Promise<{ snapshot: 
 
   let config: PosConfig | null = null;
   try {
-    config = loadPosConfig();
+    config = { cards: await loadSetupConfig() };
   } catch (error) {
     console.error("POS config read failed", messageOf(error));
+    try {
+      config = loadPosConfig();
+    } catch (yamlError) {
+      console.error("POS config file read failed", messageOf(yamlError));
+    }
   }
 
   if (!process.env.DASHBOARD_DATABASE_URL) {

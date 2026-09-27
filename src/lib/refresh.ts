@@ -2,7 +2,7 @@ import { chicagoDate, sameChicagoDay } from "@/lib/time";
 import { cardReadiness, type PosConfig } from "@/lib/pos-config";
 import type { CardAttempt } from "@/lib/square";
 import { remainingTicketedDates } from "@/lib/tickets";
-import { CARD_IDS, type CardId, type MoneyCard, type PublicSnapshot, type SquareState, type StoredSnapshot, type TicketBoard, type TicketNumbers } from "@/lib/types";
+import type { CardId, DisplayCard, MoneyCard, PublicSnapshot, SquareState, StoredSnapshot, TicketBoard, TicketNumbers } from "@/lib/types";
 
 export function emptyMoneyCard(status: MoneyCard["status"], error: string | null = null): MoneyCard {
   return { cents: null, quantity: null, asOf: null, status, error };
@@ -63,6 +63,46 @@ function mergeCard(previous: MoneyCard | undefined, next: CardAttempt, now: Date
   return emptyMoneyCard("error", next.error);
 }
 
+function displayFrom(id: CardId, label: string, money: MoneyCard): DisplayCard {
+  return { id, label, ...money };
+}
+
+function rollupOf(def: PosConfig["cards"][number], byId: Map<CardId, DisplayCard>, now: Date): DisplayCard {
+  const sources = def.rollsUp.map((id) => byId.get(id));
+  if (sources.some((source) => !source || source.cents === null)) {
+    return displayFrom(def.id, def.label, emptyMoneyCard("error", "A card in this total is unavailable."));
+  }
+  const present = sources.filter((source): source is DisplayCard => Boolean(source));
+  const quantityKnown = present.every((source) => source.quantity !== null);
+  const stale = present.some((source) => source.status === "stale" || source.status === "error");
+  return displayFrom(def.id, def.label, {
+    cents: present.reduce((sum, source) => sum + (source.cents ?? 0), 0),
+    quantity: quantityKnown ? present.reduce((sum, source) => sum + (source.quantity ?? 0), 0) : null,
+    asOf: now.toISOString(),
+    status: stale ? "stale" : "ok",
+    error: stale ? "A card in this total is stale." : null,
+  });
+}
+
+function assembleCards(
+  config: PosConfig,
+  square: Map<CardId, DisplayCard>,
+  now: Date,
+): DisplayCard[] {
+  const byId = new Map(square);
+  const pending = config.cards.filter((card) => card.rollsUp.length > 0);
+  let guard = pending.length;
+  while (pending.length > 0 && guard >= 0) {
+    guard -= 1;
+    const next = pending.findIndex((card) => card.rollsUp.every((id) => byId.has(id)));
+    if (next < 0) break;
+    const [def] = pending.splice(next, 1);
+    if (def) byId.set(def.id, rollupOf(def, byId, now));
+  }
+  for (const def of pending) byId.set(def.id, rollupOf(def, byId, now));
+  return config.cards.map((card) => byId.get(card.id) ?? displayFrom(card.id, card.label, emptyMoneyCard("error", "Card missing.")));
+}
+
 function messageOf(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "Refresh failed";
@@ -80,32 +120,43 @@ export async function buildSnapshot(input: {
   const readiness = cardReadiness(input.config);
 
   let squareState = input.previous?.squareState ?? null;
-  const cards = {} as Record<CardId, MoneyCard>;
+  const previousById = new Map((input.previous?.public.cards ?? []).map((card) => [card.id, card]));
+  const square = new Map<CardId, DisplayCard>();
 
   try {
     const pulled = await input.loadSquare(squareState);
     squareState = pulled.state;
-    for (const card of CARD_IDS) {
-      cards[card] = mergeCard(input.previous?.public[card], pulled.cards[card], input.now, day);
+    for (const card of input.config.cards) {
+      if (card.rollsUp.length > 0) continue;
+      const attempt = pulled.cards[card.id] ?? {
+        status: "error" as const,
+        cents: null,
+        quantity: null,
+        error: "Square did not return this card.",
+      };
+      square.set(card.id, displayFrom(card.id, card.label, mergeCard(previousById.get(card.id), attempt, input.now, day)));
     }
   } catch (error) {
     const text = messageOf(error);
     console.error("Square refresh failed", text);
-    for (const card of CARD_IDS) {
-      if (readiness[card] === "unconfigured") {
-        cards[card] = emptyMoneyCard("unconfigured");
+    for (const card of input.config.cards) {
+      if (card.rollsUp.length > 0) continue;
+      if (readiness[card.id] === "unconfigured") {
+        square.set(card.id, displayFrom(card.id, card.label, emptyMoneyCard("unconfigured")));
         continue;
       }
-      cards[card] = mergeCard(
-        input.previous?.public[card],
-        {
-          status: "error",
-          cents: null,
-          quantity: null,
-          error: text,
-        },
-        input.now,
-        day,
+      square.set(
+        card.id,
+        displayFrom(
+          card.id,
+          card.label,
+          mergeCard(
+            previousById.get(card.id),
+            { status: "error", cents: null, quantity: null, error: text },
+            input.now,
+            day,
+          ),
+        ),
       );
     }
   }
@@ -122,9 +173,7 @@ export async function buildSnapshot(input: {
   const snapshot: PublicSnapshot = {
     generatedAt,
     tickets,
-    beer: cards.beer,
-    merch: cards.merch,
-    food: cards.food,
+    cards: assembleCards(input.config, square, input.now),
   };
   return { public: snapshot, squareState };
 }

@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { dayBarPercent, SalesDashboard } from "@/components/sales-dashboard";
-import type { MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
+import type { DisplayCard, MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
 
-function money(cents: number | null, quantity: number | null, status: MoneyCard["status"] = "ok"): MoneyCard {
-  return { cents, quantity, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
+function money(id: string, label: string, cents: number | null, quantity: number | null, status: MoneyCard["status"] = "ok"): DisplayCard {
+  return { id, label, cents, quantity, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
 }
 
 function tickets(overrides: Partial<TicketBoard> = {}): TicketBoard {
@@ -30,9 +30,11 @@ function snapshot(overrides: Partial<PublicSnapshot> = {}): PublicSnapshot {
   return {
     generatedAt: new Date().toISOString(),
     tickets: tickets(),
-    beer: money(422050, 612),
-    merch: money(110500, null),
-    food: money(0, 0),
+    cards: [
+      money("beer", "Beer", 422050, 612),
+      money("merch", "Merch", 110500, null),
+      money("food", "Food", 0, 0),
+    ],
     ...overrides,
   };
 }
@@ -74,9 +76,11 @@ describe("sales screen", () => {
     const markup = html(
       snapshot({
         tickets: tickets({ dayNotRecorded: 0 }),
-        beer: money(422050, null),
-        merch: money(110500, null),
-        food: money(500, null),
+        cards: [
+          money("beer", "Beer", 422050, null),
+          money("merch", "Merch", 110500, null),
+          money("food", "Food", 500, null),
+        ],
       }),
     );
     expect(markup).not.toContain("Day not recorded");
@@ -87,8 +91,11 @@ describe("sales screen", () => {
   it("uses a dash for a failed read and zero dollars for an empty register", () => {
     const markup = html(
       snapshot({
-        beer: money(null, null, "unconfigured"),
-        food: money(0, null, "ok"),
+        cards: [
+          money("beer", "Beer", null, null, "unconfigured"),
+          money("merch", "Merch", 110500, 48),
+          money("food", "Food", 0, null, "ok"),
+        ],
         tickets: tickets({
           salesTodayCount: null,
           salesTodayCents: null,
@@ -108,7 +115,11 @@ describe("sales screen", () => {
       snapshot({
         generatedAt: "2020-01-01T00:00:00.000Z",
         tickets: tickets({ status: "stale" }),
-        beer: money(100, 2, "stale"),
+        cards: [
+          money("beer", "Beer", 100, 2, "stale"),
+          money("merch", "Merch", 110500, null),
+          money("food", "Food", 0, 0),
+        ],
       }),
     );
     expect(markup).toContain(">Stale<");

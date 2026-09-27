@@ -1,9 +1,9 @@
 import { chicagoDate } from "@/lib/time";
 import { remainingTicketedDates } from "@/lib/tickets";
-import type { MoneyCard, PublicSnapshot } from "@/lib/types";
+import type { DisplayCard, PublicSnapshot } from "@/lib/types";
 
-function card(cents: number, quantity: number, asOf: string): MoneyCard {
-  return { cents, quantity, asOf, status: "ok", error: null };
+function card(id: string, label: string, cents: number, quantity: number, asOf: string): DisplayCard {
+  return { id, label, cents, quantity, asOf, status: "ok", error: null };
 }
 
 /** Dev-only stand-in so the screen layout can be reviewed before credentials exist. */
@@ -26,8 +26,10 @@ export function sampleSnapshot(now: Date): PublicSnapshot {
       status: "ok",
       error: null,
     },
-    beer: card(422050, 612, asOf),
-    merch: card(110500, 48, asOf),
-    food: card(301075, 290, asOf),
+    cards: [
+      card("beer", "Beer", 422050, 612, asOf),
+      card("merch", "Merch", 110500, 48, asOf),
+      card("food", "Food", 301075, 290, asOf),
+    ],
   };
 }

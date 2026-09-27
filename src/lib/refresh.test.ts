@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PosConfig } from "@/lib/pos-config";
 import { buildSnapshot, emptyMoneyCard } from "@/lib/refresh";
 import type { CardAttempt } from "@/lib/square";
-import type { CardId, StoredSnapshot, TicketNumbers } from "@/lib/types";
+import type { CardId, DisplayCard, StoredSnapshot, TicketNumbers } from "@/lib/types";
 
 const numbers: TicketNumbers = {
   salesTodayCount: 4,
@@ -14,13 +14,20 @@ const numbers: TicketNumbers = {
 };
 
 const ready: PosConfig = {
-  beer: { locationIds: ["L"], catalogObjectIds: ["B"], categoryIds: [] },
-  merch: { locationIds: ["L"], catalogObjectIds: ["M"], categoryIds: [] },
-  food: { locationIds: [], catalogObjectIds: [], categoryIds: [] },
+  cards: [
+    { id: "beer", label: "Beer", locationIds: ["L"], catalogObjectIds: ["B"], categoryIds: [], rollsUp: [] },
+    { id: "merch", label: "Merch", locationIds: ["L"], catalogObjectIds: ["M"], categoryIds: [], rollsUp: [] },
+    { id: "food", label: "Food", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: [] },
+    { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: ["beer"] },
+  ],
 };
 
 function okCard(cents: number): CardAttempt {
   return { status: "ok", cents, quantity: 1, error: null };
+}
+
+function shown(snapshot: StoredSnapshot, id: string): DisplayCard | undefined {
+  return snapshot.public.cards.find((card) => card.id === id);
 }
 
 function previous(asOf: string, beerCents = 1000): StoredSnapshot {
@@ -29,9 +36,12 @@ function previous(asOf: string, beerCents = 1000): StoredSnapshot {
     public: {
       generatedAt: asOf,
       tickets: { ...numbers, asOf, status: "ok", error: null },
-      beer: { cents: beerCents, quantity: 8, asOf, status: "ok", error: null },
-      merch: { cents: 500, quantity: 2, asOf, status: "ok", error: null },
-      food: emptyMoneyCard("unconfigured"),
+      cards: [
+        { id: "beer", label: "Beer", cents: beerCents, quantity: 8, asOf, status: "ok", error: null },
+        { id: "merch", label: "Merch", cents: 500, quantity: 2, asOf, status: "ok", error: null },
+        { id: "food", label: "Food", ...emptyMoneyCard("unconfigured") },
+        { id: "alcohol", label: "Alcohol", cents: beerCents, quantity: 8, asOf, status: "ok", error: null },
+      ],
     },
   };
 }
@@ -49,9 +59,10 @@ describe("snapshot refresh", () => {
     });
     expect(snapshot.public.tickets.status).toBe("ok");
     expect(snapshot.public.tickets.salesTodayCount).toBe(9);
-    expect(snapshot.public.beer).toMatchObject({ status: "stale", cents: 1000, error: "Square timeout" });
-    expect(snapshot.public.merch.status).toBe("stale");
-    expect(snapshot.public.food.status).toBe("unconfigured");
+    expect(shown(snapshot, "beer")).toMatchObject({ status: "stale", cents: 1000, error: "Square timeout" });
+    expect(shown(snapshot, "merch")?.status).toBe("stale");
+    expect(shown(snapshot, "food")?.status).toBe("unconfigured");
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "stale", cents: 1000 });
     expect(snapshot.squareState?.updatedSince).toBe("2026-10-03T21:00:00.000Z");
   });
 
@@ -75,8 +86,9 @@ describe("snapshot refresh", () => {
       salesTodayCount: 4,
       error: "database unavailable",
     });
-    expect(snapshot.public.beer).toMatchObject({ status: "ok", cents: 2500 });
-    expect(snapshot.public.food.status).toBe("unconfigured");
+    expect(shown(snapshot, "beer")).toMatchObject({ status: "ok", cents: 2500 });
+    expect(shown(snapshot, "food")?.status).toBe("unconfigured");
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 2500 });
   });
 
   it("does not present yesterday's totals as today", async () => {
@@ -97,7 +109,32 @@ describe("snapshot refresh", () => {
       { date: "2026-10-04", label: "Sunday, Oct 4", count: null },
     ]);
     expect(snapshot.public.tickets.weekendPasses).toBeNull();
-    expect(snapshot.public.beer.status).toBe("error");
-    expect(snapshot.public.beer.cents).toBeNull();
+    expect(shown(snapshot, "beer")?.status).toBe("error");
+    expect(shown(snapshot, "beer")?.cents).toBeNull();
+    expect(shown(snapshot, "alcohol")?.cents).toBeNull();
+  });
+
+  it("adds each alcohol location into one total without adding quantities that are missing", async () => {
+    const config: PosConfig = {
+      cards: [
+        { id: "north", label: "North tent", locationIds: ["L1"], catalogObjectIds: ["a"], categoryIds: [], rollsUp: [] },
+        { id: "south", label: "South tent", locationIds: ["L2"], catalogObjectIds: ["b"], categoryIds: [], rollsUp: [] },
+        { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: ["north", "south"] },
+      ],
+    };
+    const snapshot = await buildSnapshot({
+      now: new Date("2026-10-03T22:00:00.000Z"),
+      previous: null,
+      config,
+      loadTickets: async () => numbers,
+      loadSquare: async () => ({
+        cards: {
+          north: { status: "ok", cents: 100, quantity: 2, error: null },
+          south: { status: "ok", cents: 50, quantity: null, error: null },
+        },
+        state: null,
+      }),
+    });
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 150, quantity: null, label: "Alcohol" });
   });
 });

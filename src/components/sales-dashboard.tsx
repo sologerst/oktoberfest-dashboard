@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatCents, formatCount, formatQuantity } from "@/lib/format";
 import { formatChicagoTime, formatFestivalDay, snapshotNeedsRefresh } from "@/lib/time";
-import type { CardId, MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
-
-const CARD_LABELS: Record<CardId, string> = {
-  beer: "Beer",
-  merch: "Merch",
-  food: "Food",
-};
+import type { DisplayCard, PublicSnapshot, TicketBoard } from "@/lib/types";
 
 const POLL_MS = 60_000;
 
@@ -133,7 +128,7 @@ function DayRows({ tickets }: { tickets: TicketBoard }) {
   );
 }
 
-function posSubtitle(card: MoneyCard): { text: string; quiet: boolean } | null {
+function posSubtitle(card: DisplayCard): { text: string; quiet: boolean } | null {
   if (card.cents === null) return { text: "Unavailable", quiet: true };
   if (card.cents === 0) return { text: "No sales yet.", quiet: true };
   if (card.quantity === null) return null;
@@ -143,12 +138,12 @@ function posSubtitle(card: MoneyCard): { text: string; quiet: boolean } | null {
   return { text: `${quantity} ${noun}`, quiet: false };
 }
 
-function PosCard({ id, card }: { id: CardId; card: MoneyCard }) {
+function PosCard({ card }: { card: DisplayCard }) {
   const subtitle = posSubtitle(card);
   const unavailable = card.cents === null;
   return (
     <article className="rounded-sm border border-white/10 bg-card p-5">
-      <p className="font-label text-[10px] text-white/55">{CARD_LABELS[id]}</p>
+      <p className="font-label text-[10px] text-white/55">{card.label}</p>
       <p className={`font-display text-3xl font-bold tabular-nums ${unavailable ? "text-white" : "text-mark"}`}>
         {formatCents(card.cents)}
       </p>
@@ -159,7 +154,7 @@ function PosCard({ id, card }: { id: CardId; card: MoneyCard }) {
   );
 }
 
-function sectionStale(cards: MoneyCard[]): boolean {
+function sectionStale(cards: DisplayCard[]): boolean {
   return cards.some((card) => card.status === "stale");
 }
 
@@ -190,7 +185,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
 
   const headerStale = pollError || snapshotNeedsRefresh(snapshot.generatedAt, now);
   const ticketsStale = snapshot.tickets.status === "stale";
-  const posStale = sectionStale([snapshot.beer, snapshot.merch, snapshot.food]);
+  const posStale = sectionStale(snapshot.cards);
   const scanDay = formatFestivalDay(snapshot.tickets.asOf ?? snapshot.generatedAt);
 
   return (
@@ -207,6 +202,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
             </div>
           </div>
           <p className="text-sm text-white/65">
+            <Link href="/setup" className="mr-4 text-white/55">Card setup</Link>
             {sample ? <span className="font-label mr-3 text-[10px] text-mark">Sample</span> : null}
             {headerStale ? <span className="font-label mr-2 text-[10px] text-mark">Stale</span> : null}
             As of {formatChicagoTime(snapshot.generatedAt)}
@@ -228,9 +224,9 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
             {posStale ? <span className="text-mark"> · Stale</span> : null}
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <PosCard id="beer" card={snapshot.beer} />
-            <PosCard id="merch" card={snapshot.merch} />
-            <PosCard id="food" card={snapshot.food} />
+            {snapshot.cards.map((card) => (
+              <PosCard key={card.id} card={card} />
+            ))}
           </div>
         </section>
       </main>
