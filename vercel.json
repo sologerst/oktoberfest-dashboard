@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": null,
+  "crons": [
+    {
+      "path": "/api/cron/refresh",
+      "schedule": "0 17 * * *"
+    }
+  ]
+}

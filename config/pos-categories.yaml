@@ -1,0 +1,15 @@
+# Square POS cards. Fill these after listing locations and the catalog.
+# Ids are configuration, not component code. An item in two lists fails those cards
+# instead of counting the sale twice.
+beer:
+  locationIds: []
+  catalogObjectIds: []
+  categoryIds: []
+merch:
+  locationIds: []
+  catalogObjectIds: []
+  categoryIds: []
+food:
+  locationIds: []
+  catalogObjectIds: []
+  categoryIds: []

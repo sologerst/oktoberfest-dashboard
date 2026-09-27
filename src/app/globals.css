@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --page: oklch(0.11 0.04 60);
+  --header: oklch(0.14 0.04 60);
+  --card: oklch(0.16 0.04 60);
+  --mark: oklch(0.72 0.16 65);
+  --mark-ink: oklch(0.14 0.04 60);
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-header: var(--header);
+  --color-card: var(--card);
+  --color-mark: var(--mark);
+  --color-mark-ink: var(--mark-ink);
+  --font-sans: var(--font-dm-sans), "DM Sans", sans-serif;
+  --font-display: var(--font-fraunces), Fraunces, serif;
+}
+
+@utility font-label {
+  font-family: var(--font-bebas), "Bebas Neue", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body {
+  background: var(--page);
+  color: white;
+  font-family: var(--font-dm-sans), "DM Sans", sans-serif;
+}
