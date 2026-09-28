@@ -1,6 +1,6 @@
 import { isProductionEnv } from "@/lib/auth";
 import { readStoredSnapshot } from "@/lib/db";
-import { cardReadiness, invalidCardMessage, loadPosConfig, type PosConfig } from "@/lib/pos-config";
+import { cardReadiness, invalidCardMessage, loadPosConfig, posFingerprint, type PosConfig } from "@/lib/pos-config";
 import { emptyMoneyCard, emptyTicketBoard } from "@/lib/refresh";
 import { loadSetupConfig, runRefresh } from "@/lib/run-refresh";
 import { sampleSnapshot } from "@/lib/sample-snapshot";
@@ -85,7 +85,8 @@ export async function loadScreenSnapshot(now = new Date()): Promise<{ snapshot: 
   try {
     let stored = await readStoredSnapshot();
     let refreshError: string | null = null;
-    if (snapshotNeedsRefresh(stored?.public.generatedAt, now)) {
+    const configChanged = config !== null && stored?.public.configFingerprint !== posFingerprint(config);
+    if (snapshotNeedsRefresh(stored?.public.generatedAt, now) || configChanged) {
       const refreshed = await refreshIfDue(stored, now);
       stored = refreshed.stored;
       refreshError = refreshed.error;

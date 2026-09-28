@@ -1,7 +1,27 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { messageFromSaveResponse } from "@/components/pos-setup";
 import { cardReadiness, parsePosConfig, validatePosConfig } from "@/lib/pos-config";
+
+describe("save response", () => {
+  it("turns an empty or broken response into a refresh hint", () => {
+    expect(messageFromSaveResponse(504, "")).toEqual({
+      error: "Saving cards failed (504). Refresh this page. If your cards are still here, they were saved.",
+    });
+    const broken = messageFromSaveResponse(500, "<html></html>");
+    expect("error" in broken ? broken.error : "").toMatch(/before the server finished/);
+  });
+
+  it("reads a saved response without waiting on the refresh", () => {
+    expect(messageFromSaveResponse(200, JSON.stringify({ ok: true, refreshed: false }))).toEqual({
+      message: "Saved. The next refresh will use these cards.",
+    });
+    expect(messageFromSaveResponse(400, JSON.stringify({ ok: false, error: "Item beer is on North and South." }))).toEqual({
+      error: "Item beer is on North and South.",
+    });
+  });
+});
 
 describe("POS config", () => {
   it("parses the committed catalog file as unconfigured cards", () => {

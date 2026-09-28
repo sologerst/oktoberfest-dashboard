@@ -37,6 +37,8 @@ export type PublicSnapshot = {
   generatedAt: string;
   tickets: TicketBoard;
   cards: DisplayCard[];
+  /** Which POS card mapping produced this snapshot. Omitted on older rows. */
+  configFingerprint?: string;
 };
 
 /** Per-order POS contributions for the current Chicago day. Not sent to the browser. */

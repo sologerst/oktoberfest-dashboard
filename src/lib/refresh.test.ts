@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PosConfig } from "@/lib/pos-config";
+import { posFingerprint, type PosConfig } from "@/lib/pos-config";
 import { buildSnapshot, emptyMoneyCard } from "@/lib/refresh";
 import type { CardAttempt } from "@/lib/square";
 import type { CardId, DisplayCard, StoredSnapshot, TicketNumbers } from "@/lib/types";
@@ -63,6 +63,7 @@ describe("snapshot refresh", () => {
     expect(shown(snapshot, "merch")?.status).toBe("stale");
     expect(shown(snapshot, "food")?.status).toBe("unconfigured");
     expect(shown(snapshot, "alcohol")).toMatchObject({ status: "stale", cents: 1000 });
+    expect(snapshot.public.configFingerprint).toBe(posFingerprint(ready));
     expect(snapshot.squareState?.updatedSince).toBe("2026-10-03T21:00:00.000Z");
   });
 

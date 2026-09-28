@@ -25,6 +25,28 @@ function text(ids: string[]): string {
   return ids.join("\n");
 }
 
+export function messageFromSaveResponse(status: number, text: string): { error: string } | { message: string } {
+  if (!text.trim()) {
+    return {
+      error: `Saving cards failed (${status}). Refresh this page. If your cards are still here, they were saved.`,
+    };
+  }
+  let body: { ok?: boolean; error?: string; refreshed?: boolean };
+  try {
+    body = JSON.parse(text) as { ok?: boolean; error?: string; refreshed?: boolean };
+  } catch {
+    return {
+      error: "Saving cards failed before the server finished. Refresh this page. If your cards are still here, they were saved.",
+    };
+  }
+  if (status < 200 || status >= 300 || body.ok === false) {
+    return { error: body.error ?? "Could not save cards." };
+  }
+  return {
+    message: body.refreshed ? "Saved. The sales screen is using these cards." : "Saved. The next refresh will use these cards.",
+  };
+}
+
 function toDraft(card: PosCardConfig): Draft {
   return {
     id: card.id,
@@ -125,9 +147,9 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cards }),
       });
-      const body = (await response.json()) as { ok?: boolean; error?: string; refreshed?: boolean };
-      if (!response.ok) throw new Error(body.error ?? "Could not save cards.");
-      setMessage(body.refreshed ? "Saved. The sales screen is using these cards." : "Saved. The next refresh will use these cards.");
+      const result = messageFromSaveResponse(response.status, await response.text());
+      if ("error" in result) throw new Error(result.error);
+      setMessage(result.message);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save cards.");
     } finally {
