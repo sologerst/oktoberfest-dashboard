@@ -72,7 +72,14 @@ function dashboardConnectionString(): string {
 export function getDashboardPool(): pg.Pool {
   const connectionString = dashboardConnectionString();
   if (!dashboardPool) {
-    dashboardPool = new Pool({ connectionString, max: 2, ssl: sslFor(connectionString) });
+    dashboardPool = new Pool({
+      connectionString,
+      max: 2,
+      ssl: sslFor(connectionString),
+      connectionTimeoutMillis: 8_000,
+      query_timeout: 15_000,
+      statement_timeout: 15_000,
+    });
   }
   return dashboardPool;
 }
