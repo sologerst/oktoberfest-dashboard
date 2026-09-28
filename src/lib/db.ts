@@ -30,6 +30,29 @@ const ENSURE_SQL = `
   END $$;
 `;
 
+const DIRECT_SUPABASE_HOST = /^db\.([a-z0-9]+)\.supabase\.co$/i;
+
+/**
+ * The direct Supabase host is IPv6-only. Vercel is IPv4-only, so that host
+ * never answers and the card save times out. The session pooler is the IPv4 path.
+ */
+export function reachableDashboardUrl(connectionString: string): string {
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    return connectionString;
+  }
+  const match = url.hostname.match(DIRECT_SUPABASE_HOST);
+  if (!match) return connectionString;
+  const ref = match[1];
+  const user = decodeURIComponent(url.username);
+  if (user && !user.includes(".")) url.username = `${user}.${ref}`;
+  url.hostname = process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com";
+  if (url.port !== "6543") url.port = "5432";
+  return url.toString();
+}
+
 export function databaseIdentity(connectionString: string): string {
   try {
     const url = new URL(connectionString);
@@ -66,7 +89,7 @@ function dashboardConnectionString(): string {
   const connectionString = process.env.DASHBOARD_DATABASE_URL;
   if (!connectionString) throw new Error("DASHBOARD_DATABASE_URL is not set");
   assertDashboardIsSeparate();
-  return connectionString;
+  return reachableDashboardUrl(connectionString);
 }
 
 export function getDashboardPool(): pg.Pool {
@@ -93,6 +116,8 @@ export function getFestivalPool(): pg.Pool {
       connectionString,
       max: 1,
       ssl: sslFor(connectionString),
+      connectionTimeoutMillis: 8_000,
+      query_timeout: 15_000,
       options: "-c default_transaction_read_only=on -c statement_timeout=15000",
     });
   }
