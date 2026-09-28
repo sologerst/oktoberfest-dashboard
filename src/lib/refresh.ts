@@ -1,5 +1,5 @@
 import { chicagoDate, sameChicagoDay } from "@/lib/time";
-import { cardReadiness, type PosConfig } from "@/lib/pos-config";
+import { cardReadiness, posFingerprint, type PosConfig } from "@/lib/pos-config";
 import type { CardAttempt } from "@/lib/square";
 import { remainingTicketedDates } from "@/lib/tickets";
 import type { CardId, DisplayCard, MoneyCard, PublicSnapshot, SquareState, StoredSnapshot, TicketBoard, TicketNumbers } from "@/lib/types";
@@ -174,6 +174,7 @@ export async function buildSnapshot(input: {
     generatedAt,
     tickets,
     cards: assembleCards(input.config, square, input.now),
+    configFingerprint: posFingerprint(input.config),
   };
   return { public: snapshot, squareState };
 }
