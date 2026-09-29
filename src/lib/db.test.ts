@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertDashboardIsSeparate, databaseIdentity, reachableDashboardUrl } from "@/lib/db";
+import { assertDashboardIsSeparate, dashboardConnectionParts, databaseIdentity } from "@/lib/db";
 
 describe("database targets", () => {
   it("identifies a database without its password", () => {
@@ -9,23 +9,49 @@ describe("database targets", () => {
   });
 
   it("reaches the IPv6-only Supabase host through the IPv4 session pooler", () => {
-    const rewritten = reachableDashboardUrl(
-      "postgresql://postgres:s3cret@db.hpzmgvazlegwaiflzusc.supabase.co:5432/postgres",
-    );
-    const url = new URL(rewritten);
-    expect(url.hostname).toBe("aws-0-us-east-1.pooler.supabase.com");
-    expect(url.port).toBe("5432");
-    expect(decodeURIComponent(url.username)).toBe("postgres.hpzmgvazlegwaiflzusc");
-    expect(decodeURIComponent(url.password)).toBe("s3cret");
-    expect(url.pathname).toBe("/postgres");
+    expect(
+      dashboardConnectionParts("postgresql://postgres:s3cret@db.hpzmgvazlegwaiflzusc.supabase.co:5432/postgres"),
+    ).toMatchObject({
+      host: "aws-0-us-east-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.hpzmgvazlegwaiflzusc",
+      password: "s3cret",
+      database: "postgres",
+    });
+  });
+
+  it("keeps a password that would break a URL", () => {
+    expect(
+      dashboardConnectionParts(
+        "postgresql://postgres:abc#def@db.hpzmgvazlegwaiflzusc.supabase.co:5432/postgres",
+      ),
+    ).toMatchObject({
+      host: "aws-0-us-east-1.pooler.supabase.com",
+      user: "postgres.hpzmgvazlegwaiflzusc",
+      password: "abc#def",
+    });
+    expect(
+      dashboardConnectionParts("postgresql://postgres:p@ss@db.hpzmgvazlegwaiflzusc.supabase.co:5432/postgres"),
+    ).toMatchObject({
+      password: "p@ss",
+      host: "aws-0-us-east-1.pooler.supabase.com",
+    });
   });
 
   it("leaves a pooler url and a local url unchanged", () => {
-    const pooler = "postgresql://postgres.ref:s3cret@aws-0-us-east-1.pooler.supabase.com:5432/postgres";
-    expect(reachableDashboardUrl(pooler)).toBe(pooler);
-    expect(reachableDashboardUrl("postgresql://dashboard:dashboard@127.0.0.1:5432/dashboard")).toBe(
-      "postgresql://dashboard:dashboard@127.0.0.1:5432/dashboard",
-    );
+    expect(
+      dashboardConnectionParts("postgresql://postgres.ref:s3cret@aws-0-us-east-1.pooler.supabase.com:5432/postgres"),
+    ).toMatchObject({
+      host: "aws-0-us-east-1.pooler.supabase.com",
+      user: "postgres.ref",
+      password: "s3cret",
+    });
+    expect(dashboardConnectionParts("postgresql://dashboard:dashboard@127.0.0.1:5432/dashboard")).toMatchObject({
+      host: "127.0.0.1",
+      port: 5432,
+      user: "dashboard",
+      database: "dashboard",
+    });
   });
 
   it("refuses to use the festival database as the snapshot store", () => {

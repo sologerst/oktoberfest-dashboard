@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { isDashboardRequestAuthorized } from "@/lib/auth";
-import { writePosConfig } from "@/lib/db";
+import { dashboardDatabaseHost, writePosConfig } from "@/lib/db";
 import { validatePosConfig } from "@/lib/pos-config";
 import { loadSetupConfig, runRefresh } from "@/lib/run-refresh";
 
@@ -8,11 +8,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function saveFailure(error: unknown): string {
+  const host = dashboardDatabaseHost();
   const message = error instanceof Error ? error.message : "Cards could not be saved.";
-  console.error("POS config write failed", message);
-  if (/timeout|timed out/i.test(message)) return "The dashboard database did not respond in time. Try again.";
+  console.error("POS config write failed", host, message);
+  if (/timeout|timed out/i.test(message)) return `The dashboard database at ${host} did not respond in time. Try again.`;
   if (/password|authentication/i.test(message)) return "The dashboard database rejected the connection. Check DASHBOARD_DATABASE_URL.";
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(message)) return "The dashboard database could not be reached. Check DASHBOARD_DATABASE_URL.";
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH/i.test(message)) return `The dashboard database at ${host} could not be reached.`;
   return "Cards could not be saved. Check the dashboard database connection.";
 }
 
