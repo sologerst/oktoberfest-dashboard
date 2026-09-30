@@ -86,6 +86,25 @@ describe("database targets", () => {
       password: "abc#def",
       host: "aws-1-us-east-1.pooler.supabase.com",
     });
+    expect(
+      festivalConnectionParts(
+        "postgresql://postgres:s3cret@abcd1234abcd1234abcd.supabase.co:5432/postgres",
+      ),
+    ).toMatchObject({
+      host: "aws-1-us-east-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.abcd1234abcd1234abcd",
+      password: "s3cret",
+      database: "postgres",
+    });
+    expect(
+      festivalConnectionParts(
+        "postgresql://postgres.abcd1234abcd1234abcd:s3cret@abcd1234abcd1234abcd.supabase.co:5432/postgres",
+      ),
+    ).toMatchObject({
+      host: "aws-1-us-east-1.pooler.supabase.com",
+      user: "postgres.abcd1234abcd1234abcd",
+    });
     expect(festivalHostsToTry("aws-1-us-east-1.pooler.supabase.com")).toEqual([
       "aws-1-us-east-1.pooler.supabase.com",
       "aws-0-us-east-1.pooler.supabase.com",

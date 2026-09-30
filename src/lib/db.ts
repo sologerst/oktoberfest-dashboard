@@ -39,6 +39,17 @@ const ENSURE_STATEMENTS = [
 ];
 
 const DIRECT_SUPABASE_HOST = /^db\.([a-z0-9]+)\.supabase\.co\.?$/i;
+const BARE_SUPABASE_HOST = /^([a-z0-9]{20})\.supabase\.co\.?$/i;
+
+/** Project ref from db.<ref>.supabase.co or the API host <ref>.supabase.co. */
+export function supabaseProjectRef(host: string): string | null {
+  return host.match(DIRECT_SUPABASE_HOST)?.[1] ?? host.match(BARE_SUPABASE_HOST)?.[1] ?? null;
+}
+
+function poolerUser(user: string | undefined, ref: string): string | undefined {
+  if (!user || user.includes(".")) return user;
+  return `${user}.${ref}`;
+}
 
 export type DatabaseTarget = {
   host: string;
@@ -88,13 +99,11 @@ function connectionTarget(connectionString: string): DatabaseTarget {
  */
 export function dashboardConnectionParts(connectionString: string): DatabaseTarget {
   const parsed = connectionTarget(connectionString);
-  const match = parsed.host.match(DIRECT_SUPABASE_HOST);
-  if (!match) return parsed;
-  const ref = match[1];
-  const user = parsed.user && !parsed.user.includes(".") ? `${parsed.user}.${ref}` : parsed.user;
+  const ref = supabaseProjectRef(parsed.host);
+  if (!ref) return parsed;
   return {
     ...parsed,
-    user,
+    user: poolerUser(parsed.user, ref),
     host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
     port: parsed.port === 6543 ? 6543 : 5432,
   };
@@ -104,18 +113,17 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
  * Festival ticket reads. The public site's DATABASE_URL is the transaction
  * pooler (port 6543), which cannot run this app's parameterized queries.
  * Session mode is the same host on port 5432. The festival project is on the
- * aws-1 us-east-1 pooler; the dashboard project is on aws-0. A direct
- * db.<ref>.supabase.co host must not be sent to the dashboard cluster.
+ * aws-1 us-east-1 pooler; the dashboard project is on aws-0. db.<ref>.supabase.co
+ * is IPv6-only. <ref>.supabase.co is the HTTP API. Neither answers Postgres
+ * from Vercel, so both go to the festival session pooler.
  */
 export function festivalConnectionParts(connectionString: string): DatabaseTarget {
   const parsed = connectionTarget(connectionString);
-  const match = parsed.host.match(DIRECT_SUPABASE_HOST);
-  if (match) {
-    const ref = match[1];
-    const user = parsed.user && !parsed.user.includes(".") ? `${parsed.user}.${ref}` : parsed.user;
+  const ref = supabaseProjectRef(parsed.host);
+  if (ref) {
     return {
       ...parsed,
-      user,
+      user: poolerUser(parsed.user, ref),
       host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
       port: 5432,
     };
