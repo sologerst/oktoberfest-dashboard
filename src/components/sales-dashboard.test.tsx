@@ -101,10 +101,12 @@ describe("sales screen", () => {
           salesTodayCents: null,
           scannedToday: null,
           status: "error",
+          error: "Festival database at aws-1-us-east-1.pooler.supabase.com: password authentication failed",
         }),
       }),
     );
     expect(markup).toContain("Unavailable");
+    expect(markup).toContain("password authentication failed");
     expect(markup).toContain("No sales yet.");
     expect(markup).not.toContain("config/pos-categories.yaml");
     expect(markup).not.toContain("$0.00</p><p class=\"mt-1 text-xs text-white/45\">Unavailable");

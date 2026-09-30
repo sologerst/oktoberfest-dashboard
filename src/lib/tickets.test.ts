@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  HIDDEN_TICKETS_ERROR,
   loadTicketNumbers,
   remainingTicketedDates,
   salesTodayQuery,
@@ -109,5 +110,37 @@ describe("ticket aggregates", () => {
     expect(numbers.days).toEqual([{ date: "2026-10-04", label: "Sunday, Oct 4", count: 2 }]);
     expect(numbers.weekendPasses).toBe(0);
     expect(numbers.dayNotRecorded).toBe(0);
+  });
+
+  it("keeps a real zero board when the role can see tickets", async () => {
+    const numbers = await loadTicketNumbers(
+      {
+        async query<T>(text: string) {
+          if (text.includes("pg_class")) return { rows: [{ sees: true }] as T[] };
+          if (text.includes("ticket_check_ins")) return { rows: [{ count: 0 }] as T[] };
+          if (text.includes("valid_date")) return { rows: [] as T[] };
+          return { rows: [{ count: 0, cents: 0 }] as T[] };
+        },
+      },
+      "2026-09-30",
+    );
+    expect(numbers.salesTodayCount).toBe(0);
+    expect(numbers.days.every((day) => day.count === 0)).toBe(true);
+  });
+
+  it("rejects an empty board when row level security hides every ticket", async () => {
+    await expect(
+      loadTicketNumbers(
+        {
+          async query<T>(text: string) {
+            if (text.includes("pg_class")) return { rows: [{ sees: false }] as T[] };
+            if (text.includes("ticket_check_ins")) return { rows: [{ count: 0 }] as T[] };
+            if (text.includes("valid_date")) return { rows: [] as T[] };
+            return { rows: [{ count: 0, cents: 0 }] as T[] };
+          },
+        },
+        "2026-09-30",
+      ),
+    ).rejects.toThrow(HIDDEN_TICKETS_ERROR);
   });
 });

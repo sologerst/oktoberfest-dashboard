@@ -59,6 +59,31 @@ export function scannedTodayQuery(chicagoDay: string): SqlQuery {
   };
 }
 
+/**
+ * Table owners see rows unless FORCE ROW LEVEL SECURITY is on. Other roles
+ * with row security and no policy get zero rows and no error.
+ */
+export function ticketVisibilityQuery(): SqlQuery {
+  return {
+    text: `
+      SELECT (
+        r.rolsuper
+        OR r.rolbypassrls
+        OR (c.relowner = r.oid AND NOT c.relforcerowsecurity)
+      ) AS sees
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_roles r ON r.rolname = current_user
+      WHERE n.nspname = 'public'
+        AND c.relname = 'tickets'
+    `,
+    values: [],
+  };
+}
+
+export const HIDDEN_TICKETS_ERROR =
+  "The festival database role cannot read ticket rows because row level security is on. Use the postgres session pooler URL for FESTIVAL_DATABASE_URL.";
+
 export function soldBreakdownQuery(remainingDates: string[]): SqlQuery {
   const undatedSlugs = [...WEEKEND_SLUGS, ...SINGLE_DAY_SLUGS];
   return {
@@ -126,6 +151,17 @@ function asInt(value: unknown, label: string): number {
   return number;
 }
 
+function boardIsEmpty(numbers: TicketNumbers): boolean {
+  return (
+    numbers.salesTodayCount === 0 &&
+    numbers.salesTodayCents === 0 &&
+    numbers.scannedToday === 0 &&
+    numbers.weekendPasses === 0 &&
+    numbers.dayNotRecorded === 0 &&
+    numbers.days.every((day) => day.count === 0)
+  );
+}
+
 export async function loadTicketNumbers(db: Queryable, chicagoDay: string): Promise<TicketNumbers> {
   const remaining = remainingTicketedDates(chicagoDay);
   const salesQuery = salesTodayQuery(chicagoDay);
@@ -142,10 +178,18 @@ export async function loadTicketNumbers(db: Queryable, chicagoDay: string): Prom
   const scannedRow = scanned.rows[0];
   if (!salesRow || !scannedRow) throw new Error("Ticket aggregate returned no row");
 
-  return {
+  const numbers: TicketNumbers = {
     salesTodayCount: asInt(salesRow.count, "sales count"),
     salesTodayCents: asInt(salesRow.cents, "sales cents"),
     scannedToday: asInt(scannedRow.count, "scan count"),
     ...shapeSoldLines(sold.rows, remaining),
   };
+  if (!boardIsEmpty(numbers)) return numbers;
+
+  const visibility = ticketVisibilityQuery();
+  const seen = await db.query<{ sees: boolean }>(visibility.text, visibility.values);
+  const sees = seen.rows[0]?.sees;
+  if (sees === undefined) throw new Error("The festival database has no public.tickets table.");
+  if (!sees) throw new Error(HIDDEN_TICKETS_ERROR);
+  return numbers;
 }

@@ -2,7 +2,7 @@
 
 Internal sales screen for Nashville Oktoberfest 2026. It is a separate app from the public festival site. The festival database is read-only here. Beer, merch, and food come from Square POS orders.
 
-The screen polls a snapshot every 60 seconds. When that snapshot is older than a minute, the poll refreshes it once for every open screen: Square and ticket SQL run together, then one write to this app's own database. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update.
+The screen polls a snapshot every 60 seconds. When that snapshot is older than a minute, the poll refreshes it once for every open screen: Square and ticket SQL run together, then one write to this app's own database. If that snapshot database is unreachable, ticket numbers still load from the festival database for the open screen. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update and the ticket section shows the database error.
 
 ## What the screen shows
 
