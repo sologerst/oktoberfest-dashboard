@@ -234,10 +234,18 @@ async function openFestivalPool(): Promise<pg.Pool> {
     } catch (error) {
       lastError = error;
       await pool.end().catch(() => undefined);
-      if (!isSupabaseTenantMiss(error) || host === hosts[hosts.length - 1]) throw error;
+      if (!isSupabaseTenantMiss(error) || host === hosts[hosts.length - 1]) {
+        throw festivalConnectError(host, error);
+      }
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Festival database is unreachable");
+  throw festivalConnectError(hosts[hosts.length - 1] ?? parts.host, lastError);
+}
+
+function festivalConnectError(host: string, error: unknown): Error {
+  const message = error instanceof Error && error.message ? error.message : "Festival database is unreachable";
+  if (message.includes(host)) return error instanceof Error ? error : new Error(message);
+  return new Error(`Festival database at ${host}: ${message}`);
 }
 
 function ensureFestivalPool(): Promise<pg.Pool> {

@@ -2,7 +2,7 @@ import { isProductionEnv } from "@/lib/auth";
 import { readStoredSnapshot } from "@/lib/db";
 import { cardReadiness, invalidCardMessage, loadPosConfig, posFingerprint, type PosConfig } from "@/lib/pos-config";
 import { emptyMoneyCard, emptyTicketBoard } from "@/lib/refresh";
-import { loadSetupConfig, runRefresh } from "@/lib/run-refresh";
+import { loadFreshSnapshot, loadSetupConfig, runRefresh } from "@/lib/run-refresh";
 import { sampleSnapshot } from "@/lib/sample-snapshot";
 import { chicagoDate, snapshotNeedsRefresh } from "@/lib/time";
 import { remainingTicketedDates } from "@/lib/tickets";
@@ -43,6 +43,15 @@ export function waitingSnapshot(now: Date, ticketError: string, config: PosConfi
   };
 }
 
+async function liveSnapshot(now: Date, config: PosConfig | null): Promise<PublicSnapshot> {
+  try {
+    const snapshot = await loadFreshSnapshot(now, config);
+    return snapshot.public;
+  } catch (error) {
+    return waitingSnapshot(now, messageOf(error), config);
+  }
+}
+
 async function refreshIfDue(
   stored: StoredSnapshot | null,
   now: Date,
@@ -76,31 +85,22 @@ export async function loadScreenSnapshot(now = new Date()): Promise<{ snapshot: 
   }
 
   if (!process.env.DASHBOARD_DATABASE_URL) {
-    return {
-      snapshot: waitingSnapshot(now, "DASHBOARD_DATABASE_URL is not set.", config),
-      sample: false,
-    };
+    return { snapshot: await liveSnapshot(now, config), sample: false };
   }
 
   try {
     let stored = await readStoredSnapshot();
-    let refreshError: string | null = null;
     const configChanged = config !== null && stored?.public.configFingerprint !== posFingerprint(config);
     if (snapshotNeedsRefresh(stored?.public.generatedAt, now) || configChanged) {
       const refreshed = await refreshIfDue(stored, now);
       stored = refreshed.stored;
-      refreshError = refreshed.error;
     }
     if (!stored) {
-      return {
-        snapshot: waitingSnapshot(now, refreshError ?? "Waiting for the first refresh.", config),
-        sample: false,
-      };
+      return { snapshot: await liveSnapshot(now, config), sample: false };
     }
     return { snapshot: stored.public, sample: false };
   } catch (error) {
-    const text = messageOf(error);
-    console.error("Snapshot read failed", text);
-    return { snapshot: waitingSnapshot(now, text, config), sample: false };
+    console.error("Snapshot read failed", messageOf(error));
+    return { snapshot: await liveSnapshot(now, config), sample: false };
   }
 }

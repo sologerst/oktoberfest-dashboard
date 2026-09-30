@@ -31,33 +31,76 @@ async function activeConfig(): Promise<{ config: PosConfig; error: Error | null 
   }
 }
 
-export async function runRefresh(now = new Date()): Promise<{ skipped: true } | { skipped: false; snapshot: StoredSnapshot }> {
-  const locked = await withDashboardLock(async () => {
-    const previous = await readStoredSnapshot();
-    const { config, error: configError } = await activeConfig();
+function fallbackConfig(config: PosConfig | null): PosConfig {
+  if (config) return config;
+  try {
+    return loadPosConfig();
+  } catch (error) {
+    console.error("POS config file read failed", error);
+    return unreadConfig;
+  }
+}
 
-    const snapshot = await buildSnapshot({
-      now,
-      previous,
-      config,
-      loadTickets: () => loadTicketNumbers(getFestivalPool(), chicagoDate(now)),
-      loadSquare: (state) => {
-        if (configError) throw configError;
-        return pullPos({
-          config,
-          state,
-          now,
-          token: process.env.SQUARE_ACCESS_TOKEN ?? null,
-          environment: process.env.SQUARE_ENVIRONMENT ?? null,
-        });
-      },
-    });
-    await writeStoredSnapshot(snapshot);
-    return snapshot;
+/** Ticket and Square reads that do not require the snapshot database. */
+export async function loadFreshSnapshot(
+  now: Date,
+  config: PosConfig | null,
+  previous: StoredSnapshot | null = null,
+): Promise<StoredSnapshot> {
+  const resolved = fallbackConfig(config);
+  return buildSnapshot({
+    now,
+    previous,
+    config: resolved,
+    loadTickets: () => loadTicketNumbers(getFestivalPool(), chicagoDate(now)),
+    loadSquare: (state) =>
+      pullPos({
+        config: resolved,
+        state,
+        now,
+        token: process.env.SQUARE_ACCESS_TOKEN ?? null,
+        environment: process.env.SQUARE_ENVIRONMENT ?? null,
+      }),
   });
+}
 
-  if (locked.skipped) return { skipped: true };
-  return { skipped: false, snapshot: locked.result };
+export async function runRefresh(now = new Date()): Promise<{ skipped: true } | { skipped: false; snapshot: StoredSnapshot }> {
+  try {
+    const locked = await withDashboardLock(async () => {
+      const previous = await readStoredSnapshot();
+      const { config, error: configError } = await activeConfig();
+
+      const snapshot = await buildSnapshot({
+        now,
+        previous,
+        config,
+        loadTickets: () => loadTicketNumbers(getFestivalPool(), chicagoDate(now)),
+        loadSquare: (state) => {
+          if (configError) throw configError;
+          return pullPos({
+            config,
+            state,
+            now,
+            token: process.env.SQUARE_ACCESS_TOKEN ?? null,
+            environment: process.env.SQUARE_ENVIRONMENT ?? null,
+          });
+        },
+      });
+      try {
+        await writeStoredSnapshot(snapshot);
+      } catch (error) {
+        console.error("Snapshot write failed", error);
+      }
+      return snapshot;
+    });
+
+    if (locked.skipped) return { skipped: true };
+    return { skipped: false, snapshot: locked.result };
+  } catch (error) {
+    console.error("Snapshot store unavailable", error);
+    const snapshot = await loadFreshSnapshot(now, null);
+    return { skipped: false, snapshot };
+  }
 }
 
 export async function loadSetupConfig(): Promise<PosCardConfig[]> {

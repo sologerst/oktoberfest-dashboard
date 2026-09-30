@@ -215,6 +215,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
             Tickets
             {ticketsStale ? <span className="text-mark"> · Stale</span> : <span> · Refreshes every 60s</span>}
           </h2>
+          {snapshot.tickets.error ? <p className="text-sm text-white/70">{snapshot.tickets.error}</p> : null}
           <TicketStats tickets={snapshot.tickets} scanDay={scanDay} />
         </section>
         <DayRows tickets={snapshot.tickets} />
