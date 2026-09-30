@@ -135,14 +135,19 @@ function DayRows({ tickets }: { tickets: TicketBoard }) {
   );
 }
 
+function countNoun(card: DisplayCard): string {
+  const label = card.quantityLabel?.trim();
+  if (label) return label;
+  return card.quantity === 1 ? "item" : "items";
+}
+
 function posSubtitle(card: DisplayCard): { text: string; quiet: boolean } | null {
   if (card.cents === null) return { text: "Unavailable", quiet: true };
-  if (card.cents === 0) return { text: "No sales yet.", quiet: true };
-  if (card.quantity === null) return null;
-  const quantity = formatQuantity(card.quantity);
+  const quantity = card.quantity === null ? null : formatQuantity(card.quantity);
+  const emptyRegister = card.cents === 0 && (card.quantity === null || card.quantity === 0);
+  if (emptyRegister) return { text: "No sales yet.", quiet: true };
   if (quantity === null) return null;
-  const noun = card.quantity === 1 ? "item" : "items";
-  return { text: `${quantity} ${noun}`, quiet: false };
+  return { text: `${quantity} ${countNoun(card)}`, quiet: false };
 }
 
 function PosCard({ card }: { card: DisplayCard }) {

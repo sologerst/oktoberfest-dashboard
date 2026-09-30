@@ -15,10 +15,10 @@ const numbers: TicketNumbers = {
 
 const ready: PosConfig = {
   cards: [
-    { id: "beer", label: "Beer", locationIds: ["L"], catalogObjectIds: ["B"], categoryIds: [], rollsUp: [] },
-    { id: "merch", label: "Merch", locationIds: ["L"], catalogObjectIds: ["M"], categoryIds: [], rollsUp: [] },
-    { id: "food", label: "Food", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: [] },
-    { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: ["beer"] },
+    { id: "beer", label: "Beer", locationIds: ["L"], catalogObjectIds: ["B"], categoryIds: [], countItemIds: ["B"], countLabel: "beers", rollsUp: [] },
+    { id: "merch", label: "Merch", locationIds: ["L"], catalogObjectIds: ["M"], categoryIds: [], countItemIds: [], countLabel: "", rollsUp: [] },
+    { id: "food", label: "Food", locationIds: [], catalogObjectIds: [], categoryIds: [], countItemIds: [], countLabel: "", rollsUp: [] },
+    { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], countItemIds: [], countLabel: "beers", rollsUp: ["beer"] },
   ],
 };
 
@@ -114,7 +114,7 @@ describe("snapshot refresh", () => {
     });
     expect(shown(snapshot, "beer")).toMatchObject({ status: "ok", cents: 2500 });
     expect(shown(snapshot, "food")?.status).toBe("unconfigured");
-    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 2500 });
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 2500, quantity: 1, quantityLabel: "beers" });
   });
 
   it("does not present yesterday's totals as today", async () => {
@@ -143,9 +143,9 @@ describe("snapshot refresh", () => {
   it("adds each alcohol location into one total without adding quantities that are missing", async () => {
     const config: PosConfig = {
       cards: [
-        { id: "north", label: "North tent", locationIds: ["L1"], catalogObjectIds: ["a"], categoryIds: [], rollsUp: [] },
-        { id: "south", label: "South tent", locationIds: ["L2"], catalogObjectIds: ["b"], categoryIds: [], rollsUp: [] },
-        { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: ["north", "south"] },
+        { id: "north", label: "North tent", locationIds: ["L1"], catalogObjectIds: ["a"], categoryIds: [], countItemIds: ["a"], countLabel: "", rollsUp: [] },
+        { id: "south", label: "South tent", locationIds: ["L2"], catalogObjectIds: ["b"], categoryIds: [], countItemIds: ["b"], countLabel: "", rollsUp: [] },
+        { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], countItemIds: [], countLabel: "", rollsUp: ["north", "south"] },
       ],
     };
     const snapshot = await buildSnapshot({
@@ -162,5 +162,29 @@ describe("snapshot refresh", () => {
       }),
     });
     expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 150, quantity: null, label: "Alcohol" });
+  });
+
+  it("sums programmed counts and skips a booth that only reports dollars", async () => {
+    const config: PosConfig = {
+      cards: [
+        { id: "north", label: "North tent", locationIds: ["L1"], catalogObjectIds: ["a"], categoryIds: [], countItemIds: ["a"], countLabel: "beers", rollsUp: [] },
+        { id: "south", label: "South tent", locationIds: ["L2"], catalogObjectIds: ["b"], categoryIds: [], countItemIds: [], countLabel: "", rollsUp: [] },
+        { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], countItemIds: [], countLabel: "beers", rollsUp: ["north", "south"] },
+      ],
+    };
+    const snapshot = await buildSnapshot({
+      now: new Date("2026-10-03T22:00:00.000Z"),
+      previous: null,
+      config,
+      loadTickets: async () => numbers,
+      loadSquare: async () => ({
+        cards: {
+          north: { status: "ok", cents: 100, quantity: 2, error: null },
+          south: { status: "ok", cents: 50, quantity: null, error: null },
+        },
+        state: null,
+      }),
+    });
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 150, quantity: 2, quantityLabel: "beers" });
   });
 });

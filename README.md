@@ -9,7 +9,7 @@ The screen polls a snapshot every 60 seconds. When that snapshot is older than a
 - Tickets sold today (count and dollars) and unique scans for today's festival date.
 - Sold tickets for each remaining festival day: Thursday Oct 1 (complimentary Community Day), Friday Oct 2, Saturday Oct 3, and Sunday Oct 4, 2026. Days already past drop off.
 - Weekend passes on their own line. Undated `ga`, `vip`, `ga-comp`, and `vip-any-day` tickets show as **day not recorded**. Dated complimentary tickets stay on the day stored in `tickets.validDate`. They are not guessed back into a date.
-- Beer, merch, and food dollars, plus quantity when the Square line items have it.
+- Beer, merch, and food dollars. A card also shows a count when its setup lists the variation ids to count.
 
 Times use America/Chicago.
 
@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local`.
 | `DASHBOARD_BASIC_AUTH_USER` / `DASHBOARD_BASIC_AUTH_PASSWORD` | Gate for the TV and office screen. Production stays locked until both are set. |
 | `CRON_SECRET` | Vercel sends `Authorization: Bearer <CRON_SECRET>` to `/api/cron/refresh`. |
 
-Open **Card setup** on the signed-in sales screen to map Square. Each card takes a location id plus item or category ids, or it adds other cards together. Use one card per alcohol booth, then an Alcohol card that checks those booths. The same location can be on more than one card. An item listed on two cards stops those cards instead of counting the sale twice. `config/pos-categories.yaml` is only the fallback before the first save.
+Open **Card setup** on the signed-in sales screen to map Square. Each card takes a location id plus item or category ids, or it adds other cards together. Use one card per alcohol booth, then an Alcohol card that checks those booths. The same location can be on more than one card. An item listed on two cards stops those cards instead of counting the sale twice. To show a count under the dollars, paste the variation ids to count. The dollar amount still includes every item on the card. Leave that list blank to show dollars only. A total card adds those counts and can name them, for example beers. `config/pos-categories.yaml` is only the fallback before the first save.
 
 `npm run dev` serves the waiting screen with no credentials. `DASHBOARD_SAMPLE=1` shows sample numbers locally and is ignored in production.
 

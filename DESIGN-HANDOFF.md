@@ -112,7 +112,7 @@ Each card:
 
 1. Label `BEER`, `MERCH`, or `FOOD`. Bebas, `text-white/80`, `clamp(1.7rem, 5.4cqi, 2.15rem)`, tracking widest.
 2. Today's dollars, Fraunces bold, amber, `clamp(3.25rem, 18cqi, 8rem)`.
-3. Subtitle in DM Sans, `text-white/65`, `clamp(1.25rem, 3cqi, 1.55rem)`, two lines tall: item quantity when Square sent one (`128 items`). If there is no quantity, leave the subtitle line blank. Do not invent one.
+3. Subtitle in DM Sans, `text-white/65`, `clamp(1.25rem, 3cqi, 1.55rem)`, two lines tall: the programmed item count when card setup lists variation ids to count (`128 beers`, or `128 items` when no name is set). If that list is blank, or a counted line has no quantity, leave the subtitle line blank. Do not invent one.
 
 A card with no sales today still renders. Value is `$0.00`. Subtitle is `No sales yet.` in `text-white/55`.
 

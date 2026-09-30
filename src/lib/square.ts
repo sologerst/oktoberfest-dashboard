@@ -118,6 +118,7 @@ function lineQuantity(line: SquareLine): { quantity: number; known: boolean } {
 export function contributionForOrder(
   order: SquareOrder,
   membership: Map<string, CardId>,
+  countIds: ReadonlySet<string>,
 ): SquareOrderContribution["cards"] {
   const cards: SquareOrderContribution["cards"] = {};
   for (const line of order.line_items ?? []) {
@@ -126,10 +127,12 @@ export function contributionForOrder(
     const card = membership.get(catalogId);
     if (!card) continue;
     const current = cards[card] ?? { cents: 0, quantity: 0, quantityKnown: true };
-    const quantity = lineQuantity(line);
     current.cents += lineCents(line);
-    current.quantity += quantity.quantity;
-    current.quantityKnown = current.quantityKnown && quantity.known;
+    if (countIds.has(catalogId)) {
+      const quantity = lineQuantity(line);
+      current.quantity += quantity.quantity;
+      current.quantityKnown = current.quantityKnown && quantity.known;
+    }
     cards[card] = current;
   }
   return cards;
@@ -154,6 +157,7 @@ export function foldOrders(input: {
   day: string;
   bounds: { start: string; end: string };
   membership: Map<string, CardId>;
+  countIds: ReadonlySet<string>;
 }): SquareState {
   const base: SquareState =
     input.previous?.chicagoDay === input.day
@@ -175,7 +179,7 @@ export function foldOrders(input: {
     }
     base.orders[order.id] = {
       updatedAt: order.updated_at ?? updatedSince ?? input.bounds.start,
-      cards: contributionForOrder(order, input.membership),
+      cards: contributionForOrder(order, input.membership, input.countIds),
     };
   }
   base.updatedSince = updatedSince;
@@ -186,6 +190,7 @@ export function totalsFromState(
   state: SquareState,
   cardIds: CardId[],
   failed: Set<CardId>,
+  counting: ReadonlySet<CardId>,
 ): Record<CardId, { cents: number; quantity: number | null }> {
   const totals = {} as Record<CardId, { cents: number; quantity: number; known: boolean }>;
   for (const card of cardIds) totals[card] = { cents: 0, quantity: 0, known: true };
@@ -205,7 +210,11 @@ export function totalsFromState(
   const result = {} as Record<CardId, { cents: number; quantity: number | null }>;
   for (const card of cardIds) {
     const total = totals[card];
-    result[card] = { cents: total?.cents ?? 0, quantity: total?.known ? total.quantity : null };
+    const counted = counting.has(card);
+    result[card] = {
+      cents: total?.cents ?? 0,
+      quantity: counted && total?.known ? total.quantity : null,
+    };
   }
   return result;
 }
@@ -381,14 +390,16 @@ export async function pullPos(input: {
   }
 
   const { membership, failed } = expandedMembership(input.config, categoryObjects);
+  const countIds = new Set(input.config.cards.flatMap((card) => card.countItemIds));
+  const counting = new Set(input.config.cards.filter((card) => card.countItemIds.length > 0).map((card) => card.id));
   const sameConfig = input.state?.configFingerprint === fingerprint;
   const previous = input.state?.chicagoDay === day && sameConfig ? input.state : null;
   const locationIds = [...new Set(ready.flatMap((card) => card.locationIds))];
   const incoming = await searchOrders(client, locationIds, bounds, previous?.updatedSince ?? null);
-  const state = foldOrders({ previous, incoming, day, bounds, membership });
+  const state = foldOrders({ previous, incoming, day, bounds, membership, countIds });
   state.configFingerprint = fingerprint;
   return {
-    cards: attemptsFrom(input.config, failed, totalsFromState(state, squareIds, failed), null),
+    cards: attemptsFrom(input.config, failed, totalsFromState(state, squareIds, failed, counting), null),
     state,
   };
 }

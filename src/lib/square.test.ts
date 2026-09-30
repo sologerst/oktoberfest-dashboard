@@ -13,7 +13,16 @@ import type { CardId, SquareState } from "@/lib/types";
 const bounds = chicagoDayBounds("2026-10-03");
 
 function blank(id: string, label: string): PosCardConfig {
-  return { id, label, locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: [] };
+  return {
+    id,
+    label,
+    locationIds: [],
+    catalogObjectIds: [],
+    categoryIds: [],
+    countItemIds: [],
+    countLabel: "",
+    rollsUp: [],
+  };
 }
 
 function config(overrides: Partial<Record<string, Partial<PosCardConfig>>> = {}): PosConfig {
@@ -25,8 +34,8 @@ function config(overrides: Partial<Record<string, Partial<PosCardConfig>>> = {})
   };
 }
 
-function totals(state: SquareState, failed = new Set<CardId>()) {
-  return totalsFromState(state, ["beer", "merch", "food"], failed);
+function totals(state: SquareState, failed = new Set<CardId>(), counting = new Set<CardId>(["beer", "merch", "food"])) {
+  return totalsFromState(state, ["beer", "merch", "food"], failed, counting);
 }
 
 describe("Square card totals", () => {
@@ -52,13 +61,15 @@ describe("Square card totals", () => {
       updated_at: "2026-10-03T18:00:00.000Z",
       line_items: [{ catalog_object_id: "beer-1", quantity: "2", total_money: { amount: 1400 } }],
     };
-    const first = foldOrders({ previous: null, incoming: [order], day: "2026-10-03", bounds, membership });
+    const countIds = new Set(["beer-1"]);
+    const first = foldOrders({ previous: null, incoming: [order], day: "2026-10-03", bounds, membership, countIds });
     const second = foldOrders({
       previous: first,
       incoming: [{ ...order, updated_at: "2026-10-03T19:00:00.000Z", line_items: [{ catalog_object_id: "beer-1", quantity: "1", total_money: { amount: 700 } }] }],
       day: "2026-10-03",
       bounds,
       membership,
+      countIds,
     });
     expect(totals(second).beer).toEqual({ cents: 700, quantity: 1 });
     expect(second.updatedSince).toBe("2026-10-03T19:00:00.000Z");
@@ -69,6 +80,7 @@ describe("Square card totals", () => {
       day: "2026-10-04",
       bounds: chicagoDayBounds("2026-10-04"),
       membership,
+      countIds,
     });
     expect(nextDay.orders).toEqual({});
   });
@@ -93,8 +105,37 @@ describe("Square card totals", () => {
       day: "2026-10-03",
       bounds,
       membership,
+      countIds: new Set(["food-1"]),
     });
-    expect(totals(state).food).toEqual({ cents: 750, quantity: null });
+    expect(totals(state, new Set(), new Set(["food"])).food).toEqual({ cents: 750, quantity: null });
+  });
+
+  it("counts only the programmed items and still sums every item's dollars", () => {
+    const membership = new Map<string, CardId>([
+      ["beer-1", "beer"],
+      ["beer-2", "beer"],
+    ]);
+    const state = foldOrders({
+      previous: null,
+      incoming: [
+        {
+          id: "order-3",
+          state: "COMPLETED",
+          closed_at: "2026-10-03T20:00:00Z",
+          updated_at: "2026-10-03T20:00:00Z",
+          line_items: [
+            { catalog_object_id: "beer-1", quantity: "2", total_money: { amount: 1000 } },
+            { catalog_object_id: "beer-2", total_money: { amount: 500 } },
+          ],
+        },
+      ],
+      day: "2026-10-03",
+      bounds,
+      membership,
+      countIds: new Set(["beer-1"]),
+    });
+    expect(totals(state, new Set(), new Set(["beer"])).beer).toEqual({ cents: 1500, quantity: 2 });
+    expect(totals(state, new Set(), new Set()).beer).toEqual({ cents: 1500, quantity: null });
   });
 
   it("searches closed orders for the day, then updates since the cursor", async () => {
@@ -124,7 +165,9 @@ describe("Square card totals", () => {
       );
     };
 
-    const pos = config({ beer: { locationIds: ["LOC"], catalogObjectIds: ["beer-1"] } });
+    const pos = config({
+      beer: { locationIds: ["LOC"], catalogObjectIds: ["beer-1"], countItemIds: ["beer-1"], countLabel: "beers" },
+    });
     const now = new Date("2026-10-03T20:00:00.000Z");
     const first = await pullPos({
       config: pos,

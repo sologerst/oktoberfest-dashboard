@@ -9,6 +9,10 @@ export type PosCardConfig = {
   locationIds: string[];
   catalogObjectIds: string[];
   categoryIds: string[];
+  /** Variation ids whose quantities are shown under the dollar total. Empty means dollars only. */
+  countItemIds: string[];
+  /** Word after that count, such as "beers". Empty uses item/items. */
+  countLabel: string;
   /** Other card ids whose totals are added into this card. */
   rollsUp: CardId[];
 };
@@ -33,6 +37,18 @@ function stringList(value: unknown, label: string): string[] {
   return value.map((item) => item.trim());
 }
 
+function unique(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+function optionalCountLabel(value: unknown, label: string): string {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") throw new Error(`${label} must be text.`);
+  const trimmed = value.trim();
+  if (trimmed.length > 32) throw new Error(`${label} must be 32 characters or fewer.`);
+  return trimmed;
+}
+
 function parseCard(value: unknown, id: string, label: string): PosCardConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${id} must be a mapping`);
@@ -45,6 +61,8 @@ function parseCard(value: unknown, id: string, label: string): PosCardConfig {
     locationIds: stringList(record.locationIds, `${id}.locationIds`),
     catalogObjectIds: stringList(record.catalogObjectIds, `${id}.catalogObjectIds`),
     categoryIds: stringList(record.categoryIds, `${id}.categoryIds`),
+    countItemIds: unique(stringList(record.countItemIds, `${id}.countItemIds`)),
+    countLabel: optionalCountLabel(record.countLabel, `${id}.countLabel`),
     rollsUp: stringList(record.rollsUp, `${id}.rollsUp`),
   };
 }
@@ -130,6 +148,8 @@ export function validatePosConfig(value: unknown): PosConfig {
       locationIds: rollsUp.length > 0 ? [] : stringList(record.locationIds, `${label} locations`),
       catalogObjectIds: rollsUp.length > 0 ? [] : stringList(record.catalogObjectIds, `${label} items`),
       categoryIds: rollsUp.length > 0 ? [] : stringList(record.categoryIds, `${label} categories`),
+      countItemIds: rollsUp.length > 0 ? [] : unique(stringList(record.countItemIds, `${label} counted items`)),
+      countLabel: optionalCountLabel(record.countLabel, `${label} count name`),
       rollsUp,
     };
   });
@@ -150,6 +170,27 @@ export function validatePosConfig(value: unknown): PosConfig {
   }
   rejectShared(itemOwners, "Item");
   rejectShared(categoryOwners, "Category");
+
+  const countOwners = new Map<string, string[]>();
+  for (const card of cards) {
+    if (card.rollsUp.length > 0) continue;
+    if (card.categoryIds.length === 0) {
+      const allowed = new Set(card.catalogObjectIds);
+      for (const id of card.countItemIds) {
+        if (!allowed.has(id)) {
+          throw new Error(`${card.label} counts ${id}, but that item is not in its item ids.`);
+        }
+      }
+    }
+    claim(countOwners, card.countItemIds, card.label);
+    for (const id of card.countItemIds) {
+      const others = (itemOwners.get(id) ?? []).filter((owner) => owner !== card.label);
+      if (others.length > 0) {
+        throw new Error(`Item ${id} is on ${others.join(" and ")}. Count it on that card.`);
+      }
+    }
+  }
+  rejectShared(countOwners, "Counted item");
   if (hasRollupCycle(cards)) throw new Error("Card totals cannot loop. A total cannot include itself through other totals.");
   const duplicated = duplicatedRollup(cards);
   if (duplicated) throw new Error(duplicated);
@@ -171,7 +212,7 @@ function claim(owners: Map<string, string[]>, ids: string[], label: string) {
   }
 }
 
-function rejectShared(owners: Map<string, string[]>, kind: "Item" | "Category") {
+function rejectShared(owners: Map<string, string[]>, kind: "Item" | "Category" | "Counted item") {
   for (const [id, labels] of owners) {
     if (labels.length > 1) {
       throw new Error(`${kind} ${id} is on ${labels.join(" and ")}. Put it on one card.`);
@@ -230,6 +271,7 @@ export function posFingerprint(config: PosConfig): string {
       locationIds: [...card.locationIds].sort(),
       catalogObjectIds: [...card.catalogObjectIds].sort(),
       categoryIds: [...card.categoryIds].sort(),
+      countItemIds: [...card.countItemIds].sort(),
       rollsUp: [...card.rollsUp].sort(),
     })),
   );

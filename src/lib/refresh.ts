@@ -63,25 +63,41 @@ function mergeCard(previous: MoneyCard | undefined, next: CardAttempt, now: Date
   return emptyMoneyCard("error", next.error);
 }
 
-function displayFrom(id: CardId, label: string, money: MoneyCard): DisplayCard {
-  return { id, label, ...money };
+function displayFrom(id: CardId, label: string, money: MoneyCard, quantityLabel: string | null = null): DisplayCard {
+  return { id, label, quantityLabel, ...money };
 }
 
-function rollupOf(def: PosConfig["cards"][number], byId: Map<CardId, DisplayCard>, now: Date): DisplayCard {
+function countWord(card: PosConfig["cards"][number]): string | null {
+  const label = card.countLabel.trim();
+  return label.length > 0 ? label : null;
+}
+
+function cardCounts(id: CardId, config: PosConfig, stack: CardId[] = []): boolean {
+  if (stack.includes(id)) return false;
+  const card = config.cards.find((entry) => entry.id === id);
+  if (!card) return false;
+  if (card.countItemIds.length > 0) return true;
+  return card.rollsUp.some((source) => cardCounts(source, config, [...stack, id]));
+}
+
+function rollupOf(def: PosConfig["cards"][number], byId: Map<CardId, DisplayCard>, config: PosConfig, now: Date): DisplayCard {
   const sources = def.rollsUp.map((id) => byId.get(id));
   if (sources.some((source) => !source || source.cents === null)) {
-    return displayFrom(def.id, def.label, emptyMoneyCard("error", "A card in this total is unavailable."));
+    return displayFrom(def.id, def.label, emptyMoneyCard("error", "A card in this total is unavailable."), countWord(def));
   }
   const present = sources.filter((source): source is DisplayCard => Boolean(source));
-  const quantityKnown = present.every((source) => source.quantity !== null);
+  const counting = present.filter((source) => cardCounts(source.id, config));
+  const quantity = counting.length === 0 || counting.some((source) => source.quantity === null)
+    ? null
+    : counting.reduce((sum, source) => sum + (source.quantity ?? 0), 0);
   const stale = present.some((source) => source.status === "stale" || source.status === "error");
   return displayFrom(def.id, def.label, {
     cents: present.reduce((sum, source) => sum + (source.cents ?? 0), 0),
-    quantity: quantityKnown ? present.reduce((sum, source) => sum + (source.quantity ?? 0), 0) : null,
+    quantity,
     asOf: now.toISOString(),
     status: stale ? "stale" : "ok",
     error: stale ? "A card in this total is stale." : null,
-  });
+  }, countWord(def));
 }
 
 function assembleCards(
@@ -97,9 +113,9 @@ function assembleCards(
     const next = pending.findIndex((card) => card.rollsUp.every((id) => byId.has(id)));
     if (next < 0) break;
     const [def] = pending.splice(next, 1);
-    if (def) byId.set(def.id, rollupOf(def, byId, now));
+    if (def) byId.set(def.id, rollupOf(def, byId, config, now));
   }
-  for (const def of pending) byId.set(def.id, rollupOf(def, byId, now));
+  for (const def of pending) byId.set(def.id, rollupOf(def, byId, config, now));
   return config.cards.map((card) => byId.get(card.id) ?? displayFrom(card.id, card.label, emptyMoneyCard("error", "Card missing.")));
 }
 
@@ -135,7 +151,10 @@ export async function buildSnapshot(input: {
           quantity: null,
           error: "Square did not return this card.",
         };
-        square.set(card.id, displayFrom(card.id, card.label, mergeCard(previousById.get(card.id), attempt, input.now, day)));
+        square.set(
+          card.id,
+          displayFrom(card.id, card.label, mergeCard(previousById.get(card.id), attempt, input.now, day), countWord(card)),
+        );
       }
     } catch (error) {
       const text = messageOf(error);
@@ -143,7 +162,7 @@ export async function buildSnapshot(input: {
       for (const card of input.config.cards) {
         if (card.rollsUp.length > 0) continue;
         if (readiness[card.id] === "unconfigured") {
-          square.set(card.id, displayFrom(card.id, card.label, emptyMoneyCard("unconfigured")));
+          square.set(card.id, displayFrom(card.id, card.label, emptyMoneyCard("unconfigured"), countWord(card)));
           continue;
         }
         square.set(
@@ -157,6 +176,7 @@ export async function buildSnapshot(input: {
               input.now,
               day,
             ),
+            countWord(card),
           ),
         );
       }
