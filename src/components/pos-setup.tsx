@@ -11,6 +11,8 @@ type Draft = {
   locations: string;
   items: string;
   categories: string;
+  countItems: string;
+  countLabel: string;
   rollsUp: string[];
 };
 
@@ -55,6 +57,8 @@ function toDraft(card: PosCardConfig): Draft {
     locations: text(card.locationIds),
     items: text(card.catalogObjectIds),
     categories: text(card.categoryIds),
+    countItems: text(card.countItemIds),
+    countLabel: card.countLabel,
     rollsUp: card.rollsUp,
   };
 }
@@ -80,6 +84,29 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         placeholder={placeholder}
+        className="mt-1 w-full rounded-sm border border-white/10 bg-page px-3 py-2 text-sm text-white placeholder:text-white/30"
+      />
+      <span className="mt-1 block text-xs text-white/45">{hint}</span>
+    </label>
+  );
+}
+
+function CountLabel({
+  value,
+  onChange,
+  hint = "Optional. The word after the number, written the way it should read, such as beers. Blank says items.",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+}) {
+  return (
+    <label className="block text-sm text-white/70">
+      Name for that count
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="beers"
         className="mt-1 w-full rounded-sm border border-white/10 bg-page px-3 py-2 text-sm text-white placeholder:text-white/30"
       />
       <span className="mt-1 block text-xs text-white/45">{hint}</span>
@@ -131,6 +158,15 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
         setError(`${name} needs at least one card to add.`);
         return;
       }
+      if (draft.mode === "items" && lines(draft.categories).length === 0) {
+        const items = new Set(lines(draft.items));
+        for (const id of lines(draft.countItems)) {
+          if (!items.has(id)) {
+            setError(`${name} counts ${id}, but that item is not in its item ids.`);
+            return;
+          }
+        }
+      }
     }
     setSaving(true);
     const cards = drafts.map((draft) => ({
@@ -139,6 +175,8 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
       locationIds: draft.mode === "items" ? lines(draft.locations) : [],
       catalogObjectIds: draft.mode === "items" ? lines(draft.items) : [],
       categoryIds: draft.mode === "items" ? lines(draft.categories) : [],
+      countItemIds: draft.mode === "items" ? lines(draft.countItems) : [],
+      countLabel: draft.countLabel.trim(),
       rollsUp: draft.mode === "rollup" ? draft.rollsUp : [],
     }));
     try {
@@ -172,7 +210,7 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
       </header>
       <main className="mx-auto max-w-3xl space-y-6 p-6">
         <p className="text-sm text-white/70">
-          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths.
+          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths. To show a count as well as the dollars, paste the variation ids you want counted. The dollar amount still includes every item on the card.
         </p>
         {drafts.map((draft, index) => (
           <section key={draft.id} className="space-y-4 rounded-sm border border-white/10 bg-card p-5">
@@ -240,6 +278,14 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   placeholder="Optional category id"
                   hint="Optional. A category includes every variation in it, which is the easier way to group alcohol, merch, or food."
                 />
+                <Field
+                  label="Count these items"
+                  value={draft.countItems}
+                  onChange={(countItems) => update(index, { countItems })}
+                  placeholder="Variation ids to count"
+                  hint="Optional. Variation ids this card already includes, one per line. The sales card keeps the dollar total and adds how many of these sold. Leave this blank to show dollars only."
+                />
+                <CountLabel value={draft.countLabel} onChange={(countLabel) => update(index, { countLabel })} />
               </div>
             ) : (
               <fieldset className="space-y-2">
@@ -262,6 +308,11 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                     {other.label || "Untitled card"}
                   </label>
                 ))}
+                <CountLabel
+                  value={draft.countLabel}
+                  onChange={(countLabel) => update(index, { countLabel })}
+                  hint="Optional. The total adds the numbers from the cards you check. This is the word after that number, such as beers."
+                />
               </fieldset>
             )}
           </section>
@@ -279,6 +330,8 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   locations: "",
                   items: "",
                   categories: "",
+                  countItems: "",
+                  countLabel: "",
                   rollsUp: [],
                 },
               ])

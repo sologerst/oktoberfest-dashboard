@@ -2,6 +2,8 @@
 # That page saves into this app's database. An item in two lists fails those cards
 # instead of counting the sale twice. This file is only the fallback before the
 # first save.
+# countItemIds: variation ids to show as a number under the dollars. Optional.
+# countLabel: word after that number, such as beers. Optional.
 beer:
   locationIds: []
   catalogObjectIds: []

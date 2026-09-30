@@ -216,7 +216,8 @@ function asCards(payload: Record<string, unknown>): DisplayCard[] {
       if (!entry || typeof entry !== "object") return [];
       const record = entry as Record<string, unknown>;
       if (typeof record.id !== "string" || typeof record.label !== "string") return [];
-      return [{ id: record.id, label: record.label, ...asMoney(record) }];
+      const quantityLabel = typeof record.quantityLabel === "string" ? record.quantityLabel.trim() : "";
+      return [{ id: record.id, label: record.label, quantityLabel: quantityLabel || null, ...asMoney(record) }];
     });
   }
   return legacyCards(payload) ?? [];

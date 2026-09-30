@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { messageFromSaveResponse } from "@/components/pos-setup";
-import { cardReadiness, parsePosConfig, validatePosConfig } from "@/lib/pos-config";
+import { cardReadiness, parsePosConfig, posFingerprint, validatePosConfig } from "@/lib/pos-config";
 
 describe("save response", () => {
   it("turns an empty or broken response into a refresh hint", () => {
@@ -59,6 +59,8 @@ describe("POS config", () => {
       { id: "alcohol", label: "Alcohol", locationIds: [], catalogObjectIds: [], categoryIds: [], rollsUp: ["north", "south"] },
     ]);
     expect(cardReadiness(config).alcohol).toBe("rollup");
+    expect(config.cards[0]?.countItemIds).toEqual([]);
+    expect(config.cards[0]?.countLabel).toBe("");
     expect(() =>
       validatePosConfig([
         { id: "a", label: "A", rollsUp: ["b"] },
@@ -91,5 +93,49 @@ describe("POS config", () => {
         { id: "all", label: "All alcohol", rollsUp: ["alcohol", "north"] },
       ]),
     ).toThrow(/All alcohol counts North tent more than once/);
+  });
+
+  it("accepts a count of items already on the card and rejects one that is not", () => {
+    const config = validatePosConfig([
+      {
+        id: "north",
+        label: "North tent",
+        locationIds: ["L1"],
+        catalogObjectIds: ["lager", "cup"],
+        categoryIds: [],
+        countItemIds: ["lager"],
+        countLabel: "beers",
+        rollsUp: [],
+      },
+    ]);
+    expect(config.cards[0]).toMatchObject({ countItemIds: ["lager"], countLabel: "beers" });
+    expect(() =>
+      validatePosConfig([
+        {
+          id: "north",
+          label: "North tent",
+          locationIds: ["L1"],
+          catalogObjectIds: ["lager"],
+          categoryIds: [],
+          countItemIds: ["missing"],
+          rollsUp: [],
+        },
+      ]),
+    ).toThrow(/North tent counts missing/);
+    const plain = validatePosConfig([
+      { id: "north", label: "North tent", locationIds: ["L1"], catalogObjectIds: ["lager"], categoryIds: [], rollsUp: [] },
+    ]);
+    const counted = validatePosConfig([
+      {
+        id: "north",
+        label: "North tent",
+        locationIds: ["L1"],
+        catalogObjectIds: ["lager"],
+        categoryIds: [],
+        countItemIds: ["lager"],
+        rollsUp: [],
+      },
+    ]);
+    expect(posFingerprint(plain)).not.toBe(posFingerprint(counted));
   });
 });

@@ -10,7 +10,7 @@ Refresh every **60 seconds**. Timezone for every “today” and festival day is
    - Sales today: ticket count and ticket dollars.
    - Scanned today: unique tickets checked in for today’s festival date.
    - Sold for each remaining ticketed day (Fri Oct 2, Sat Oct 3, Sun Oct 4, 2026), plus weekend passes as their own line. Weekend passes are not a sale for one day.
-2. **Beer** card, **merch** card, **food** card. Each is the sum of several Square catalog items, in dollars (and quantity if the line items have it).
+2. **Beer** card, **merch** card, **food** card. Each is the sum of several Square catalog items, in dollars. A card also shows a count when its setup lists which of those items to count.
 
 ## Where each number comes from
 

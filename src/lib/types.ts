@@ -13,6 +13,8 @@ export type MoneyCard = {
 export type DisplayCard = MoneyCard & {
   id: CardId;
   label: string;
+  /** Word after the programmed item count. Blank uses item/items. Omitted on older snapshots. */
+  quantityLabel?: string | null;
 };
 
 export type DayLine = {
@@ -44,6 +46,7 @@ export type PublicSnapshot = {
 /** Per-order POS contributions for the current Chicago day. Not sent to the browser. */
 export type SquareOrderContribution = {
   updatedAt: string;
+  /** `quantity` counts only the variation ids programmed on the card. */
   cards: Partial<Record<CardId, { cents: number; quantity: number; quantityKnown: boolean }>>;
 };
 

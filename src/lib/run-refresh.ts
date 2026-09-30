@@ -13,6 +13,8 @@ const unreadConfig: PosConfig = {
     locationIds: ["unreadable"],
     catalogObjectIds: [],
     categoryIds: [],
+    countItemIds: [],
+    countLabel: "",
     rollsUp: [],
   })),
 };

@@ -3,8 +3,15 @@ import { describe, expect, it } from "vitest";
 import { dayBarPercent, SalesDashboard } from "@/components/sales-dashboard";
 import type { DisplayCard, MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
 
-function money(id: string, label: string, cents: number | null, quantity: number | null, status: MoneyCard["status"] = "ok"): DisplayCard {
-  return { id, label, cents, quantity, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
+function money(
+  id: string,
+  label: string,
+  cents: number | null,
+  quantity: number | null,
+  status: MoneyCard["status"] = "ok",
+  quantityLabel: string | null = null,
+): DisplayCard {
+  return { id, label, cents, quantity, quantityLabel, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
 }
 
 function tickets(overrides: Partial<TicketBoard> = {}): TicketBoard {
@@ -32,7 +39,7 @@ function snapshot(overrides: Partial<PublicSnapshot> = {}): PublicSnapshot {
     tickets: tickets(),
     cards: [
       money("beer", "Beer", 422050, 612),
-      money("merch", "Merch", 110500, null),
+      money("merch", "Merch", 110500, 48, "ok", "beers"),
       money("food", "Food", 0, 0),
     ],
     ...overrides,
@@ -67,6 +74,7 @@ describe("sales screen", () => {
     expect(markup).toContain("Weekend passes");
     expect(markup).toContain("Day not recorded");
     expect(markup).toContain("612 items");
+    expect(markup).toContain("48 beers");
     expect(markup).toContain("No sales yet.");
     expect(markup).not.toContain("48 items");
     expect(markup).toContain("Refreshes every 60s");
