@@ -5,12 +5,14 @@ import {
   salesTodayQuery,
   scannedTodayQuery,
   shapeSoldLines,
+  soldBreakdownQuery,
   type SoldRow,
 } from "@/lib/tickets";
 
 describe("ticket aggregates", () => {
-  it("keeps Friday through Sunday on or after today", () => {
+  it("keeps Thursday through Sunday on or after today", () => {
     expect(remainingTicketedDates("2026-09-27").map((day) => day.date)).toEqual([
+      "2026-10-01",
       "2026-10-02",
       "2026-10-03",
       "2026-10-04",
@@ -28,6 +30,8 @@ describe("ticket aggregates", () => {
       { valid_date: null, slug: "weekend", count: 1 },
       { valid_date: null, slug: "ga", count: 7 },
       { valid_date: null, slug: "vip", count: 2 },
+      { valid_date: null, slug: "ga-comp", count: 3 },
+      { valid_date: null, slug: "vip-any-day", count: 1 },
       { valid_date: null, slug: "other", count: 9 },
     ];
     const shaped = shapeSoldLines(rows, remainingTicketedDates("2026-10-02"));
@@ -37,7 +41,32 @@ describe("ticket aggregates", () => {
       ["2026-10-04", 0],
     ]);
     expect(shaped.weekendPasses).toBe(6);
-    expect(shaped.dayNotRecorded).toBe(9);
+    expect(shaped.dayNotRecorded).toBe(13);
+  });
+
+  it("counts dated community-day comps on Thursday", () => {
+    const shaped = shapeSoldLines(
+      [
+        { valid_date: "2026-10-01", slug: "ga-comp", count: 8 },
+        { valid_date: "2026-10-02", slug: "ga-comp", count: 2 },
+      ],
+      remainingTicketedDates("2026-09-30"),
+    );
+    expect(shaped.days.map((day) => [day.date, day.count])).toEqual([
+      ["2026-10-01", 8],
+      ["2026-10-02", 2],
+      ["2026-10-03", 0],
+      ["2026-10-04", 0],
+    ]);
+    expect(soldBreakdownQuery(["2026-10-01"]).values[1]).toEqual([
+      "ga-weekend",
+      "vip-weekend",
+      "weekend",
+      "ga",
+      "vip",
+      "ga-comp",
+      "vip-any-day",
+    ]);
   });
 
   it("counts paid non-revoked tickets and drops comps from dollars only", () => {

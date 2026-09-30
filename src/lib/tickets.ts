@@ -1,13 +1,14 @@
 import type { DayLine, TicketNumbers } from "@/lib/types";
 
 export const TICKETED_DATES: DayLine[] = [
+  { date: "2026-10-01", label: "Thursday, Oct 1", count: 0 },
   { date: "2026-10-02", label: "Friday, Oct 2", count: 0 },
   { date: "2026-10-03", label: "Saturday, Oct 3", count: 0 },
   { date: "2026-10-04", label: "Sunday, Oct 4", count: 0 },
 ];
 
 export const WEEKEND_SLUGS = ["ga-weekend", "vip-weekend", "weekend"] as const;
-export const SINGLE_DAY_SLUGS = ["ga", "vip"] as const;
+export const SINGLE_DAY_SLUGS = ["ga", "vip", "ga-comp", "vip-any-day"] as const;
 
 export type SqlQuery = { text: string; values: unknown[] };
 

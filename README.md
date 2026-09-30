@@ -2,13 +2,13 @@
 
 Internal sales screen for Nashville Oktoberfest 2026. It is a separate app from the public festival site. The festival database is read-only here. Beer, merch, and food come from Square POS orders.
 
-The screen polls a snapshot every 60 seconds. When that snapshot is older than a minute, the poll refreshes it once for every open screen: Square first, then ticket SQL, then one write to this app's own database. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update.
+The screen polls a snapshot every 60 seconds. When that snapshot is older than a minute, the poll refreshes it once for every open screen: Square and ticket SQL run together, then one write to this app's own database. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update.
 
 ## What the screen shows
 
 - Tickets sold today (count and dollars) and unique scans for today's festival date.
-- Sold tickets for each remaining ticketed day: Friday Oct 2, Saturday Oct 3, Sunday Oct 4, 2026. Days already past drop off.
-- Weekend passes on their own line. Undated `ga` and `vip` tickets show as **day not recorded**. Those are orders placed before checkout stored the selected day. They are not guessed back into a date.
+- Sold tickets for each remaining festival day: Thursday Oct 1 (complimentary Community Day), Friday Oct 2, Saturday Oct 3, and Sunday Oct 4, 2026. Days already past drop off.
+- Weekend passes on their own line. Undated `ga`, `vip`, `ga-comp`, and `vip-any-day` tickets show as **day not recorded**. Dated complimentary tickets stay on the day stored in `tickets.validDate`. They are not guessed back into a date.
 - Beer, merch, and food dollars, plus quantity when the Square line items have it.
 
 Times use America/Chicago.
@@ -19,7 +19,7 @@ Copy `.env.example` to `.env.local`.
 
 | Variable | Purpose |
 |---|---|
-| `FESTIVAL_DATABASE_URL` | Festival Postgres. The app forces `default_transaction_read_only`. Prefer a role with `SELECT` on `orders`, `tickets`, `ticket_types`, and `ticket_check_ins`. Use a session connection, not a transaction pooler. |
+| `FESTIVAL_DATABASE_URL` | Festival Postgres. The festival site's `DATABASE_URL` is fine, including the transaction pooler on port 6543. This app connects in session mode and sets the session read-only. A direct `db.<ref>.supabase.co` host is rewritten to the festival IPv4 pooler (`aws-1-us-east-1` by default, then the other us-east-1 prefix if that tenant is missing). |
 | `DASHBOARD_DATABASE_URL` | This app's Postgres. Snapshot rows and card setup are stored here. Must be a different database from the festival app. A direct `db.<project>.supabase.co` host is IPv6-only and times out on Vercel; the app connects through the IPv4 session pooler instead. |
 | `SQUARE_ACCESS_TOKEN` | Token that can search orders and read the catalog for the POS locations. |
 | `SQUARE_ENVIRONMENT` | `production` or `sandbox`. |
@@ -40,4 +40,4 @@ npm run lint
 npm run build
 ```
 
-Per-day ticket lines stay incomplete until festival checkout stores `tickets.validDate` for `ga` and `vip`. This dashboard only reads that column.
+Per-day lines read `tickets.validDate`. Undated `ga` and `vip` stay on **day not recorded**. This dashboard only reads that column.

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { assertDashboardIsSeparate, dashboardConnectionParts, databaseIdentity } from "@/lib/db";
+import {
+  assertDashboardIsSeparate,
+  dashboardConnectionParts,
+  databaseIdentity,
+  festivalConnectionParts,
+  festivalHostsToTry,
+  isSupabaseTenantMiss,
+} from "@/lib/db";
 
 describe("database targets", () => {
   it("identifies a database without its password", () => {
@@ -52,6 +59,39 @@ describe("database targets", () => {
       user: "dashboard",
       database: "dashboard",
     });
+  });
+
+  it("reads the festival database in session mode on its own pooler", () => {
+    expect(
+      festivalConnectionParts("postgresql://postgres:s3cret@db.festivalref.supabase.co:5432/postgres"),
+    ).toMatchObject({
+      host: "aws-1-us-east-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.festivalref",
+      password: "s3cret",
+      database: "postgres",
+    });
+    expect(
+      festivalConnectionParts(
+        "postgresql://postgres.festivalref:s3cret@aws-1-us-east-1.pooler.supabase.com:6543/postgres",
+      ),
+    ).toMatchObject({
+      host: "aws-1-us-east-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.festivalref",
+    });
+    expect(
+      festivalConnectionParts("postgresql://postgres:abc#def@db.festivalref.supabase.co:5432/postgres"),
+    ).toMatchObject({
+      password: "abc#def",
+      host: "aws-1-us-east-1.pooler.supabase.com",
+    });
+    expect(festivalHostsToTry("aws-1-us-east-1.pooler.supabase.com")).toEqual([
+      "aws-1-us-east-1.pooler.supabase.com",
+      "aws-0-us-east-1.pooler.supabase.com",
+    ]);
+    expect(isSupabaseTenantMiss(new Error("(ENOTFOUND) tenant/user postgres.example not found"))).toBe(true);
+    expect(isSupabaseTenantMiss(new Error("password authentication failed for user \"postgres\""))).toBe(false);
   });
 
   it("refuses to use the festival database as the snapshot store", () => {
