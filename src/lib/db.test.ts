@@ -105,6 +105,37 @@ describe("database targets", () => {
       host: "aws-1-us-east-1.pooler.supabase.com",
       user: "postgres.abcd1234abcd1234abcd",
     });
+    const ref = "xtomvlrezvotveqtoeju";
+    const pooler = "aws-1-us-east-1.pooler.supabase.com";
+    const session = `postgresql://postgres.${ref}:s3cret@${pooler}:5432/postgres`;
+    const pasted = `${session}\npostgresql://postgres:s3cret@db.${ref}.supabase.co:5432/postgres`;
+    expect(festivalConnectionParts(pasted)).toMatchObject({
+      host: pooler,
+      port: 5432,
+      user: `postgres.${ref}`,
+      password: "s3cret",
+      database: "postgres",
+    });
+    expect(festivalConnectionParts(`${session}postgresql://postgres:s3cret@db.${ref}.supabase.co:5432/postgres`)).toMatchObject({
+      database: "postgres",
+      user: `postgres.${ref}`,
+      password: "s3cret",
+    });
+    expect(
+      festivalConnectionParts(
+        `${session} trailing notes that are long enough to make the database name invalid for the pooler`,
+      ),
+    ).toMatchObject({
+      database: "postgres",
+      password: "s3cret",
+    });
+    expect(
+      festivalConnectionParts(`postgresql://postgres.${ref}s3cret@${ref}.supabase.co:5432/postgres`),
+    ).toMatchObject({
+      user: `postgres.${ref}`,
+      password: "s3cret",
+      database: "postgres",
+    });
     expect(festivalHostsToTry("aws-1-us-east-1.pooler.supabase.com")).toEqual([
       "aws-1-us-east-1.pooler.supabase.com",
       "aws-0-us-east-1.pooler.supabase.com",
