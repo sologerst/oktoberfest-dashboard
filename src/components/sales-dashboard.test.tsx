@@ -107,7 +107,7 @@ describe("sales screen", () => {
     expect(markup).toContain("Unavailable");
     expect(markup).toContain("No sales yet.");
     expect(markup).not.toContain("config/pos-categories.yaml");
-    expect(markup).not.toContain("$0.00</p><p class=\"mt-1 text-xs text-white/45\">Unavailable");
+    expect(markup).not.toContain("$0.00</p><p class=\"mt-4 min-h-[2.75em] text-[clamp(1.25rem,3cqi,1.55rem)] leading-snug text-white/55\">Unavailable");
   });
 
   it("marks a stale source on its section and an old snapshot in the header", () => {

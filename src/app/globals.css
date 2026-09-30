@@ -24,6 +24,32 @@
   text-transform: uppercase;
 }
 
+.sales-screen {
+  min-height: 100dvh;
+}
+
+@media (min-width: 1280px) and (min-height: 1000px) {
+  .sales-screen {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+}
+
+@utility text-figure {
+  font-size: 4.5rem;
+  font-size: clamp(3.25rem, 18cqi, 8rem);
+  line-height: 0.88;
+  letter-spacing: -0.035em;
+}
+
+@utility text-day-figure {
+  font-size: 3.25rem;
+  font-size: clamp(2.5rem, 11cqi, 4.25rem);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+
 body {
   background: var(--page);
   color: white;
