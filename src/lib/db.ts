@@ -46,9 +46,38 @@ export function supabaseProjectRef(host: string): string | null {
   return host.match(DIRECT_SUPABASE_HOST)?.[1] ?? host.match(BARE_SUPABASE_HOST)?.[1] ?? null;
 }
 
-function poolerUser(user: string | undefined, ref: string): string | undefined {
-  if (!user || user.includes(".")) return user;
-  return `${user}.${ref}`;
+const POOLER_ROLE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
+
+/**
+ * Supavisor accepts a role and a database name of 1 to 63 printable characters.
+ * postgres.<project-ref> is the pooler username. A longer role or database is
+ * rejected as an invalid user.
+ */
+function poolerLogin(
+  user: string | undefined,
+  password: string | undefined,
+  ref: string,
+): { user: string; password?: string } {
+  const raw = user ?? "";
+  if (!password) {
+    const marker = `.${ref}`;
+    const at = raw.lastIndexOf(marker);
+    if (at > 0) {
+      const role = raw.slice(0, at);
+      const extra = raw.slice(at + marker.length);
+      if (POOLER_ROLE.test(role) && extra) return { user: `${role}.${ref}`, password: extra };
+    }
+    if (raw.startsWith("postgres") && !raw.includes(".") && raw.length > "postgres".length) {
+      return { user: `postgres.${ref}`, password: raw.slice("postgres".length) };
+    }
+  }
+  const role = raw.split(".")[0] ?? "";
+  return { user: `${POOLER_ROLE.test(role) ? role : "postgres"}.${ref}`, password };
+}
+
+function cleanSupabaseDatabase(database: string | undefined): string {
+  if (database && POOLER_ROLE.test(database)) return database;
+  return "postgres";
 }
 
 export type DatabaseTarget = {
@@ -73,8 +102,18 @@ function looseConnection(connectionString: string): DatabaseTarget {
   };
 }
 
+/** A second pasted postgres URL is not part of the password or database name. */
+function firstConnectionUri(value: string): string {
+  const raw = value.trim().replace(/^\uFEFF/, "").replace(/^['"]|['"]$/g, "");
+  const again = raw.slice(1).search(/postgres(?:ql)?:\/\//i);
+  if (again === -1) return raw;
+  const before = raw.slice(0, again + 1);
+  if (!/@[^/\s]+/.test(before)) return raw;
+  return before.trim();
+}
+
 function connectionTarget(connectionString: string): DatabaseTarget {
-  const raw = connectionString.trim().replace(/^['"]|['"]$/g, "");
+  const raw = firstConnectionUri(connectionString);
   let parsed: DatabaseTarget;
   try {
     const config = parse(raw);
@@ -100,12 +139,16 @@ function connectionTarget(connectionString: string): DatabaseTarget {
 export function dashboardConnectionParts(connectionString: string): DatabaseTarget {
   const parsed = connectionTarget(connectionString);
   const ref = supabaseProjectRef(parsed.host);
-  if (!ref) return parsed;
+  if (!ref) {
+    if (!parsed.host.includes("pooler.supabase.com")) return parsed;
+    return { ...parsed, database: cleanSupabaseDatabase(parsed.database) };
+  }
   return {
     ...parsed,
-    user: poolerUser(parsed.user, ref),
+    ...poolerLogin(parsed.user, parsed.password, ref),
     host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
     port: parsed.port === 6543 ? 6543 : 5432,
+    database: cleanSupabaseDatabase(parsed.database),
   };
 }
 
@@ -123,13 +166,18 @@ export function festivalConnectionParts(connectionString: string): DatabaseTarge
   if (ref) {
     return {
       ...parsed,
-      user: poolerUser(parsed.user, ref),
+      ...poolerLogin(parsed.user, parsed.password, ref),
       host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
       port: 5432,
+      database: cleanSupabaseDatabase(parsed.database),
     };
   }
-  if (parsed.host.includes("pooler.supabase.com") && parsed.port === 6543) {
-    return { ...parsed, port: 5432 };
+  if (parsed.host.includes("pooler.supabase.com")) {
+    return {
+      ...parsed,
+      port: parsed.port === 6543 ? 5432 : parsed.port,
+      database: cleanSupabaseDatabase(parsed.database),
+    };
   }
   return parsed;
 }
@@ -252,6 +300,11 @@ async function openFestivalPool(): Promise<pg.Pool> {
 
 function festivalConnectError(host: string, error: unknown): Error {
   const message = error instanceof Error && error.message ? error.message : "Festival database is unreachable";
+  if (/EINVALIDUSERINFO/i.test(message)) {
+    return new Error(
+      `Festival database at ${host}: the pooler rejected the username or database name. Use one session pooler URL, with user postgres.<project-ref> and database postgres.`,
+    );
+  }
   if (message.includes(host)) return error instanceof Error ? error : new Error(message);
   return new Error(`Festival database at ${host}: ${message}`);
 }
