@@ -4,6 +4,7 @@ import { isDashboardRequestAuthorized } from "@/lib/auth";
 import { loadScreenSnapshot } from "@/lib/screen";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function Page() {
   const headerStore = await headers();

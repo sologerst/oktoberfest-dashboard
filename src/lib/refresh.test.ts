@@ -47,6 +47,31 @@ function previous(asOf: string, beerCents = 1000): StoredSnapshot {
 }
 
 describe("snapshot refresh", () => {
+  it("starts the ticket read while Square is still running", async () => {
+    let ticketsStarted = false;
+    const cards: Record<CardId, CardAttempt> = {
+      beer: okCard(2500),
+      merch: okCard(800),
+      food: { status: "unconfigured", cents: null, quantity: null, error: null },
+    };
+    const snapshot = await buildSnapshot({
+      now: new Date("2026-10-03T22:00:00.000Z"),
+      previous: previous("2026-10-03T21:00:00.000Z"),
+      config: ready,
+      loadTickets: async () => {
+        ticketsStarted = true;
+        return numbers;
+      },
+      loadSquare: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        if (!ticketsStarted) throw new Error("tickets waited for Square");
+        return { cards, state: { chicagoDay: "2026-10-03", updatedSince: "2026-10-03T22:00:00.000Z", orders: {} } };
+      },
+    });
+    expect(snapshot.public.tickets.salesTodayCount).toBe(4);
+    expect(shown(snapshot, "beer")?.cents).toBe(2500);
+  });
+
   it("keeps same-day Square totals when Square fails and still updates tickets", async () => {
     const snapshot = await buildSnapshot({
       now: new Date("2026-10-03T22:00:00.000Z"),

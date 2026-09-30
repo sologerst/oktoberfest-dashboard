@@ -1,6 +1,7 @@
 import pg from "pg";
 import { parse } from "pg-connection-string";
 import { validatePosConfig, type PosConfig } from "@/lib/pos-config";
+import type { Queryable } from "@/lib/tickets";
 import type { DisplayCard, MoneyCard, StoredSnapshot, TicketBoard } from "@/lib/types";
 
 const { Pool } = pg;
@@ -61,12 +62,7 @@ function looseConnection(connectionString: string): DatabaseTarget {
   };
 }
 
-/**
- * The direct Supabase host is IPv6-only. Vercel is IPv4-only, so that host
- * never answers and the card save times out. Parts are returned separately so a
- * password containing # or @ still reaches the IPv4 session pooler.
- */
-export function dashboardConnectionParts(connectionString: string): DatabaseTarget {
+function connectionTarget(connectionString: string): DatabaseTarget {
   const raw = connectionString.trim().replace(/^['"]|['"]$/g, "");
   let parsed: DatabaseTarget;
   try {
@@ -81,8 +77,17 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
   } catch {
     parsed = { host: "", port: 5432 };
   }
-  if (!parsed.host || parsed.host === "base") parsed = looseConnection(raw);
+  if (!parsed.host || parsed.host === "base") return looseConnection(raw);
+  return parsed;
+}
 
+/**
+ * The direct Supabase host is IPv6-only. Vercel is IPv4-only, so that host
+ * never answers and the card save times out. Parts are returned separately so a
+ * password containing # or @ still reaches the IPv4 session pooler.
+ */
+export function dashboardConnectionParts(connectionString: string): DatabaseTarget {
+  const parsed = connectionTarget(connectionString);
   const match = parsed.host.match(DIRECT_SUPABASE_HOST);
   if (!match) return parsed;
   const ref = match[1];
@@ -93,6 +98,48 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
     host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
     port: parsed.port === 6543 ? 6543 : 5432,
   };
+}
+
+/**
+ * Festival ticket reads. The public site's DATABASE_URL is the transaction
+ * pooler (port 6543), which cannot run this app's parameterized queries.
+ * Session mode is the same host on port 5432. The festival project is on the
+ * aws-1 us-east-1 pooler; the dashboard project is on aws-0. A direct
+ * db.<ref>.supabase.co host must not be sent to the dashboard cluster.
+ */
+export function festivalConnectionParts(connectionString: string): DatabaseTarget {
+  const parsed = connectionTarget(connectionString);
+  const match = parsed.host.match(DIRECT_SUPABASE_HOST);
+  if (match) {
+    const ref = match[1];
+    const user = parsed.user && !parsed.user.includes(".") ? `${parsed.user}.${ref}` : parsed.user;
+    return {
+      ...parsed,
+      user,
+      host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
+      port: 5432,
+    };
+  }
+  if (parsed.host.includes("pooler.supabase.com") && parsed.port === 6543) {
+    return { ...parsed, port: 5432 };
+  }
+  return parsed;
+}
+
+export function siblingPoolerHost(host: string): string | null {
+  const match = host.match(/^(aws-)(\d)(-[a-z0-9-]+\.pooler\.supabase\.com)$/i);
+  if (!match) return null;
+  return `${match[1]}${match[2] === "0" ? "1" : "0"}${match[3]}`;
+}
+
+export function festivalHostsToTry(host: string): string[] {
+  const sibling = siblingPoolerHost(host);
+  return sibling ? [host, sibling] : [host];
+}
+
+export function isSupabaseTenantMiss(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /tenant\/user/i.test(message) && /not found/i.test(message);
 }
 
 export function dashboardDatabaseHost(): string {
@@ -125,12 +172,11 @@ function sslFor(host: string): pg.ConnectionConfig["ssl"] {
 }
 
 let dashboardPool: pg.Pool | null = null;
-let festivalPool: pg.Pool | null = null;
+let festivalPoolPromise: Promise<pg.Pool> | null = null;
 let schemaReady: Promise<void> | null = null;
 
-function poolFrom(connectionString: string, max: number): pg.PoolConfig {
-  const parts = dashboardConnectionParts(connectionString);
-  return {
+function poolConfig(parts: DatabaseTarget, max: number): pg.PoolConfig {
+  const config: pg.PoolConfig = {
     host: parts.host,
     port: parts.port,
     user: parts.user,
@@ -143,6 +189,16 @@ function poolFrom(connectionString: string, max: number): pg.PoolConfig {
     idleTimeoutMillis: 1_000,
     allowExitOnIdle: true,
   };
+  if (!parts.host.includes("pooler.supabase.com")) {
+    config.options = "-c default_transaction_read_only=on -c statement_timeout=15000";
+  }
+  return config;
+}
+
+function poolFrom(connectionString: string, max: number): pg.PoolConfig {
+  const config = poolConfig(dashboardConnectionParts(connectionString), max);
+  delete config.options;
+  return config;
 }
 
 function dashboardConnectionString(): string {
@@ -155,23 +211,71 @@ function dashboardConnectionString(): string {
 export function getDashboardPool(): pg.Pool {
   const connectionString = dashboardConnectionString();
   if (!dashboardPool) {
-    dashboardPool = new Pool(poolFrom(connectionString, 1));
+    // The refresh holds one connection for the advisory lock and needs another
+    // for the snapshot read and write. A single slot waits until the connection
+    // timeout and the ticket read never runs.
+    dashboardPool = new Pool(poolFrom(connectionString, 2));
   }
   return dashboardPool;
 }
 
-export function getFestivalPool(): pg.Pool {
+async function openFestivalPool(): Promise<pg.Pool> {
   const connectionString = process.env.FESTIVAL_DATABASE_URL;
   if (!connectionString) throw new Error("FESTIVAL_DATABASE_URL is not set");
   assertDashboardIsSeparate();
-  if (!festivalPool) {
-    const config = poolFrom(connectionString, 1);
-    if (!String(config.host).includes("pooler.supabase.com")) {
-      config.options = "-c default_transaction_read_only=on -c statement_timeout=15000";
+  const parts = festivalConnectionParts(connectionString);
+  const hosts = festivalHostsToTry(parts.host);
+  let lastError: unknown;
+  for (const host of hosts) {
+    const pool = new Pool(poolConfig({ ...parts, host }, 3));
+    try {
+      await pool.query("SELECT 1");
+      return pool;
+    } catch (error) {
+      lastError = error;
+      await pool.end().catch(() => undefined);
+      if (!isSupabaseTenantMiss(error) || host === hosts[hosts.length - 1]) {
+        throw festivalConnectError(host, error);
+      }
     }
-    festivalPool = new Pool(config);
   }
-  return festivalPool;
+  throw festivalConnectError(hosts[hosts.length - 1] ?? parts.host, lastError);
+}
+
+function festivalConnectError(host: string, error: unknown): Error {
+  const message = error instanceof Error && error.message ? error.message : "Festival database is unreachable";
+  if (message.includes(host)) return error instanceof Error ? error : new Error(message);
+  return new Error(`Festival database at ${host}: ${message}`);
+}
+
+function ensureFestivalPool(): Promise<pg.Pool> {
+  if (!festivalPoolPromise) {
+    festivalPoolPromise = openFestivalPool().catch((error: unknown) => {
+      festivalPoolPromise = null;
+      throw error;
+    });
+  }
+  return festivalPoolPromise;
+}
+
+export function getFestivalPool(): Queryable {
+  const connectionString = process.env.FESTIVAL_DATABASE_URL;
+  if (!connectionString) throw new Error("FESTIVAL_DATABASE_URL is not set");
+  assertDashboardIsSeparate();
+  return {
+    async query<T>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+      const pool = await ensureFestivalPool();
+      const client = await pool.connect();
+      try {
+        await client.query("SET default_transaction_read_only = on");
+        await client.query("SET statement_timeout = 15000");
+        const result = await client.query(text, values);
+        return { rows: result.rows as T[] };
+      } finally {
+        client.release();
+      }
+    },
+  };
 }
 
 async function ensureSchema(): Promise<void> {

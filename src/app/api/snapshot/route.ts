@@ -2,6 +2,7 @@ import { BASIC_CHALLENGE, isDashboardRequestAuthorized } from "@/lib/auth";
 import { loadScreenSnapshot } from "@/lib/screen";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   if (!isDashboardRequestAuthorized(request.headers.get("authorization"))) {

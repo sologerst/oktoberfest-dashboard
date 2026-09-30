@@ -18,7 +18,7 @@ export function sampleSnapshot(now: Date): PublicSnapshot {
       scannedToday: day >= "2026-10-02" ? 86 : 0,
       days: remainingTicketedDates(day).map((entry, index) => ({
         ...entry,
-        count: [180, 240, 96][index] ?? 0,
+        count: [120, 180, 240, 96][index] ?? 0,
       })),
       weekendPasses: 40,
       dayNotRecorded: 15,

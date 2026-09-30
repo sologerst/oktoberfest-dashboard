@@ -135,60 +135,66 @@ export async function buildSnapshot(input: {
   const generatedAt = input.now.toISOString();
   const readiness = cardReadiness(input.config);
 
-  let squareState = input.previous?.squareState ?? null;
   const previousById = new Map((input.previous?.public.cards ?? []).map((card) => [card.id, card]));
-  const square = new Map<CardId, DisplayCard>();
 
-  try {
-    const pulled = await input.loadSquare(squareState);
-    squareState = pulled.state;
-    for (const card of input.config.cards) {
-      if (card.rollsUp.length > 0) continue;
-      const attempt = pulled.cards[card.id] ?? {
-        status: "error" as const,
-        cents: null,
-        quantity: null,
-        error: "Square did not return this card.",
-      };
-      square.set(
-        card.id,
-        displayFrom(card.id, card.label, mergeCard(previousById.get(card.id), attempt, input.now, day), countWord(card)),
-      );
-    }
-  } catch (error) {
-    const text = messageOf(error);
-    console.error("Square refresh failed", text);
-    for (const card of input.config.cards) {
-      if (card.rollsUp.length > 0) continue;
-      if (readiness[card.id] === "unconfigured") {
-        square.set(card.id, displayFrom(card.id, card.label, emptyMoneyCard("unconfigured"), countWord(card)));
-        continue;
-      }
-      square.set(
-        card.id,
-        displayFrom(
+  const squareTask = (async () => {
+    let squareState = input.previous?.squareState ?? null;
+    const square = new Map<CardId, DisplayCard>();
+    try {
+      const pulled = await input.loadSquare(squareState);
+      squareState = pulled.state;
+      for (const card of input.config.cards) {
+        if (card.rollsUp.length > 0) continue;
+        const attempt = pulled.cards[card.id] ?? {
+          status: "error" as const,
+          cents: null,
+          quantity: null,
+          error: "Square did not return this card.",
+        };
+        square.set(
           card.id,
-          card.label,
-          mergeCard(
-            previousById.get(card.id),
-            { status: "error", cents: null, quantity: null, error: text },
-            input.now,
-            day,
+          displayFrom(card.id, card.label, mergeCard(previousById.get(card.id), attempt, input.now, day), countWord(card)),
+        );
+      }
+    } catch (error) {
+      const text = messageOf(error);
+      console.error("Square refresh failed", text);
+      for (const card of input.config.cards) {
+        if (card.rollsUp.length > 0) continue;
+        if (readiness[card.id] === "unconfigured") {
+          square.set(card.id, displayFrom(card.id, card.label, emptyMoneyCard("unconfigured"), countWord(card)));
+          continue;
+        }
+        square.set(
+          card.id,
+          displayFrom(
+            card.id,
+            card.label,
+            mergeCard(
+              previousById.get(card.id),
+              { status: "error", cents: null, quantity: null, error: text },
+              input.now,
+              day,
+            ),
+            countWord(card),
           ),
-          countWord(card),
-        ),
-      );
+        );
+      }
     }
-  }
+    return { squareState, square };
+  })();
 
-  let tickets: TicketBoard;
-  try {
-    tickets = freshTickets(await input.loadTickets(), input.now);
-  } catch (error) {
-    const text = messageOf(error);
-    console.error("Ticket refresh failed", text);
-    tickets = keepOrDropTickets(input.previous?.public.tickets, day, text);
-  }
+  const ticketTask = (async (): Promise<TicketBoard> => {
+    try {
+      return freshTickets(await input.loadTickets(), input.now);
+    } catch (error) {
+      const text = messageOf(error);
+      console.error("Ticket refresh failed", text);
+      return keepOrDropTickets(input.previous?.public.tickets, day, text);
+    }
+  })();
+
+  const [{ squareState, square }, tickets] = await Promise.all([squareTask, ticketTask]);
 
   const snapshot: PublicSnapshot = {
     generatedAt,
