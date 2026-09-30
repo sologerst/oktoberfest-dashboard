@@ -20,7 +20,7 @@ Copy `.env.example` to `.env.local`.
 | Variable | Purpose |
 |---|---|
 | `FESTIVAL_DATABASE_URL` | Festival Postgres. The app forces `default_transaction_read_only`. Prefer a role with `SELECT` on `orders`, `tickets`, `ticket_types`, and `ticket_check_ins`. Use a session connection, not a transaction pooler. |
-| `DASHBOARD_DATABASE_URL` | This app's Postgres. Snapshot rows and card setup are stored here. Must be a different database from the festival app. A direct `db.<project>.supabase.co` host is IPv6-only and times out on Vercel; the app connects through the IPv4 session pooler instead. |
+| `DASHBOARD_DATABASE_URL` | This app's Postgres. Snapshot rows and card setup are stored here. Must be a different database from the festival app. A direct `db.<project>.supabase.co` host is IPv6-only, and `<project>.supabase.co` is the project API rather than Postgres. Either one times out on Vercel; the app connects through the IPv4 session pooler instead. |
 | `SQUARE_ACCESS_TOKEN` | Token that can search orders and read the catalog for the POS locations. |
 | `SQUARE_ENVIRONMENT` | `production` or `sandbox`. |
 | `DASHBOARD_BASIC_AUTH_USER` / `DASHBOARD_BASIC_AUTH_PASSWORD` | Gate for the TV and office screen. Production stays locked until both are set. |

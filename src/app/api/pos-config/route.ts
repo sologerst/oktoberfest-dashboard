@@ -11,6 +11,9 @@ function saveFailure(error: unknown): string {
   const host = dashboardDatabaseHost();
   const message = error instanceof Error ? error.message : "Cards could not be saved.";
   console.error("POS config write failed", host, message);
+  if (/project address/i.test(message)) {
+    return "DASHBOARD_DATABASE_URL is the Supabase project address, not the database connection string. Use the connection string from the Supabase Connect dialog.";
+  }
   if (/timeout|timed out/i.test(message)) return `The dashboard database at ${host} did not respond in time. Try again.`;
   if (/password|authentication/i.test(message)) return "The dashboard database rejected the connection. Check DASHBOARD_DATABASE_URL.";
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH/i.test(message)) return `The dashboard database at ${host} could not be reached.`;

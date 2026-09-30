@@ -37,7 +37,8 @@ const ENSURE_STATEMENTS = [
   `,
 ];
 
-const DIRECT_SUPABASE_HOST = /^db\.([a-z0-9]+)\.supabase\.co\.?$/i;
+/** db.<ref>.supabase.co is IPv6-only. <ref>.supabase.co is the project API, not Postgres. */
+const SUPABASE_PROJECT_HOST = /^(?:db\.)?([a-z0-9]{15,})\.supabase\.co\.?$/i;
 
 export type DatabaseTarget = {
   host: string;
@@ -61,10 +62,17 @@ function looseConnection(connectionString: string): DatabaseTarget {
   };
 }
 
+function endpointHost(connectionString: string): string {
+  const at = connectionString.lastIndexOf("@");
+  if (at < 0) return "";
+  return connectionString.slice(at + 1).split(/[:/?#]/)[0] ?? "";
+}
+
 /**
- * The direct Supabase host is IPv6-only. Vercel is IPv4-only, so that host
- * never answers and the card save times out. Parts are returned separately so a
- * password containing # or @ still reaches the IPv4 session pooler.
+ * The direct Supabase host is IPv6-only, and the project API host does not
+ * speak Postgres. Vercel waits on either one until the card save times out.
+ * Parts are returned separately so a password containing # or @ still reaches
+ * the IPv4 session pooler.
  */
 export function dashboardConnectionParts(connectionString: string): DatabaseTarget {
   const raw = connectionString.trim().replace(/^['"]|['"]$/g, "");
@@ -81,11 +89,19 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
   } catch {
     parsed = { host: "", port: 5432 };
   }
-  if (!parsed.host || parsed.host === "base") parsed = looseConnection(raw);
+  const endpoint = endpointHost(raw);
+  if (!parsed.host || parsed.host === "base" || (endpoint && parsed.host !== endpoint)) {
+    const loose = looseConnection(raw);
+    if (loose.host) parsed = loose;
+  }
 
-  const match = parsed.host.match(DIRECT_SUPABASE_HOST);
-  if (!match) return parsed;
-  const ref = match[1];
+  const ref = parsed.host.match(SUPABASE_PROJECT_HOST)?.[1];
+  if (!ref) return parsed;
+  if (!parsed.password && !parsed.host.toLowerCase().startsWith("db.")) {
+    throw new Error(
+      `The database host ${parsed.host} is the Supabase project address, not Postgres. Use the connection string from the Supabase Connect dialog.`,
+    );
+  }
   const user = parsed.user && !parsed.user.includes(".") ? `${parsed.user}.${ref}` : parsed.user;
   return {
     ...parsed,
@@ -98,7 +114,11 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
 export function dashboardDatabaseHost(): string {
   const connectionString = process.env.DASHBOARD_DATABASE_URL;
   if (!connectionString) return "unset";
-  return dashboardConnectionParts(connectionString).host || "unreadable";
+  try {
+    return dashboardConnectionParts(connectionString).host || "unreadable";
+  } catch {
+    return "unreadable";
+  }
 }
 
 export function databaseIdentity(connectionString: string): string {

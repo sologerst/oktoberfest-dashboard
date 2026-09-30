@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { BASIC_CHALLENGE, isDashboardRequestAuthorized } from "@/lib/auth";
 
-const DB_REVISION = "ipv4-pooler";
+const DB_REVISION = "api-host-pooler";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

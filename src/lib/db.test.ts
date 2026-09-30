@@ -38,6 +38,34 @@ describe("database targets", () => {
     });
   });
 
+  it("reaches the project API host through the IPv4 session pooler", () => {
+    expect(
+      dashboardConnectionParts("postgresql://postgres:s3cret@hpzmgvazlegwaiflzusc.supabase.co:5432/postgres"),
+    ).toMatchObject({
+      host: "aws-0-us-east-1.pooler.supabase.com",
+      port: 5432,
+      user: "postgres.hpzmgvazlegwaiflzusc",
+      password: "s3cret",
+      database: "postgres",
+    });
+  });
+
+  it("keeps a password that starts with a hash", () => {
+    expect(
+      dashboardConnectionParts(
+        "postgresql://postgres:#secret@db.hpzmgvazlegwaiflzusc.supabase.co:5432/postgres",
+      ),
+    ).toMatchObject({
+      host: "aws-0-us-east-1.pooler.supabase.com",
+      user: "postgres.hpzmgvazlegwaiflzusc",
+      password: "#secret",
+    });
+  });
+
+  it("refuses the Supabase project URL because it is not Postgres", () => {
+    expect(() => dashboardConnectionParts("https://hpzmgvazlegwaiflzusc.supabase.co")).toThrow(/project address/);
+  });
+
   it("leaves a pooler url and a local url unchanged", () => {
     expect(
       dashboardConnectionParts("postgresql://postgres.ref:s3cret@aws-0-us-east-1.pooler.supabase.com:5432/postgres"),
