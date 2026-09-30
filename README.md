@@ -19,7 +19,7 @@ Copy `.env.example` to `.env.local`.
 
 | Variable | Purpose |
 |---|---|
-| `FESTIVAL_DATABASE_URL` | Festival Postgres. The festival site's `DATABASE_URL` is fine, including the transaction pooler on port 6543. This app connects in session mode and sets the session read-only. A direct `db.<ref>.supabase.co` host is rewritten to the festival IPv4 pooler (`aws-1-us-east-1` by default, then the other us-east-1 prefix if that tenant is missing). |
+| `FESTIVAL_DATABASE_URL` | Festival Postgres. The festival site's `DATABASE_URL` is fine, including the transaction pooler on port 6543. This app connects in session mode and sets the session read-only. A direct `db.<ref>.supabase.co` host and the project host `<ref>.supabase.co` are rewritten to the festival IPv4 pooler (`aws-1-us-east-1` by default, then the other us-east-1 prefix if that tenant is missing). |
 | `DASHBOARD_DATABASE_URL` | This app's Postgres. Snapshot rows and card setup are stored here. Must be a different database from the festival app. A direct `db.<project>.supabase.co` host is IPv6-only and times out on Vercel; the app connects through the IPv4 session pooler instead. |
 | `SQUARE_ACCESS_TOKEN` | Token that can search orders and read the catalog for the POS locations. |
 | `SQUARE_ENVIRONMENT` | `production` or `sandbox`. |
