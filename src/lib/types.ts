@@ -46,7 +46,7 @@ export type PublicSnapshot = {
 /** Per-order POS contributions for the current Chicago day. Not sent to the browser. */
 export type SquareOrderContribution = {
   updatedAt: string;
-  /** `quantity` counts only the variation ids programmed on the card. */
+  /** `quantity` counts the variations programmed on the card. A category card counts every variation in that category. */
   cards: Partial<Record<CardId, { cents: number; quantity: number; quantityKnown: boolean }>>;
 };
 

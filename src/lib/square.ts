@@ -383,6 +383,19 @@ function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType
   return cards;
 }
 
+/**
+ * Order lines carry variation ids. A category card that asks for a count is
+ * counting that category, so every variation already included in the dollars
+ * counts, not only the single id pasted into card setup.
+ */
+export function countIdsForCard(card: PosConfig["cards"][number], categoryObjectIds: readonly string[]): Set<string> {
+  const ids = new Set(card.countItemIds);
+  if (card.countItemIds.length > 0 && card.categoryIds.length > 0 && card.catalogObjectIds.length === 0) {
+    for (const id of categoryObjectIds) ids.add(id);
+  }
+  return ids;
+}
+
 export async function pullPos(input: {
   config: PosConfig;
   state: SquareState | null;
@@ -412,7 +425,9 @@ export async function pullPos(input: {
   }
 
   const { cardFor, failed } = locationMembership(input.config, categoryObjects);
-  const countIdsByCard = new Map(input.config.cards.map((card) => [card.id, new Set(card.countItemIds)]));
+  const countIdsByCard = new Map(
+    input.config.cards.map((card) => [card.id, countIdsForCard(card, categoryObjects[card.id] ?? [])]),
+  );
   const counting = new Set(input.config.cards.filter((card) => card.countItemIds.length > 0).map((card) => card.id));
   const sameConfig = input.state?.configFingerprint === fingerprint;
   const previous = input.state?.chicagoDay === day && sameConfig ? input.state : null;
