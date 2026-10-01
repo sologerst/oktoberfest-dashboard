@@ -54,7 +54,7 @@ export function chicagoDayBounds(day: string): { start: string; end: string } {
 }
 
 /** How long a snapshot can sit before the open screen refreshes it. */
-export const SNAPSHOT_MAX_AGE_MS = 60_000;
+export const SNAPSHOT_MAX_AGE_MS = 30_000;
 
 export function snapshotNeedsRefresh(
   generatedAt: string | null | undefined,

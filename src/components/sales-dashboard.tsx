@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatCents, formatCount, formatQuantity } from "@/lib/format";
-import { formatChicagoTime, formatFestivalDay, snapshotNeedsRefresh } from "@/lib/time";
+import { formatChicagoTime, formatFestivalDay, SNAPSHOT_MAX_AGE_MS, snapshotNeedsRefresh } from "@/lib/time";
 import type { DisplayCard, PublicSnapshot, TicketBoard } from "@/lib/types";
-
-const POLL_MS = 60_000;
 
 const LOGO = (
   <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -176,23 +174,32 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
+    let stopped = false;
+    let inFlight = false;
     const poll = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
       void (async () => {
         try {
           const response = await fetch("/api/snapshot", { cache: "no-store" });
           if (!response.ok) throw new Error(`Snapshot request failed (${response.status})`);
           const body = (await response.json()) as { snapshot: PublicSnapshot };
+          if (stopped) return;
           setSnapshot(body.snapshot);
           setPollError(false);
         } catch (error) {
           console.error(error);
-          setPollError(true);
+          if (!stopped) setPollError(true);
         } finally {
-          setNow(new Date());
+          inFlight = false;
+          if (!stopped) setNow(new Date());
         }
       })();
-    }, POLL_MS);
-    return () => clearInterval(poll);
+    }, SNAPSHOT_MAX_AGE_MS);
+    return () => {
+      stopped = true;
+      clearInterval(poll);
+    };
   }, []);
 
   const headerStale = pollError || snapshotNeedsRefresh(snapshot.generatedAt, now);
@@ -225,7 +232,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
         <section className="flex min-h-0 flex-1 flex-col gap-3">
           <h2 className="shrink-0 font-label text-lg text-white/60 lg:text-xl">
             Tickets
-            {ticketsStale ? <span className="text-mark"> · Stale</span> : <span> · Refreshes every 60s</span>}
+            {ticketsStale ? <span className="text-mark"> · Stale</span> : <span> · Refreshes every {SNAPSHOT_MAX_AGE_MS / 1000}s</span>}
           </h2>
           {snapshot.tickets.error ? <p className="text-sm text-white/70">{snapshot.tickets.error}</p> : null}
           <TicketStats tickets={snapshot.tickets} scanDay={scanDay} />
