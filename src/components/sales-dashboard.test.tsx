@@ -81,6 +81,7 @@ describe("sales screen", () => {
     expect(markup).toContain("xl:grid-cols-4");
     expect(markup).toContain("lg:grid-cols-4");
     expect(markup).toContain("Proverbs");
+    expect(markup).toContain("0 beers");
     expect(markup).toContain("Sunday, Oct 4");
   });
 
@@ -110,7 +111,7 @@ describe("sales screen", () => {
     expect(markup).toContain("Day not recorded");
     expect(markup).toContain("612 items");
     expect(markup).toContain("48 beers");
-    expect(markup).toContain("No sales yet.");
+    expect(markup).toContain("0 items");
     expect(markup).not.toContain("48 items");
     expect(markup).toContain("Refreshes every 30s");
   });

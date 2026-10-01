@@ -158,11 +158,12 @@ function countNoun(card: DisplayCard): string {
 
 function posSubtitle(card: DisplayCard): { text: string; quiet: boolean } | null {
   if (card.cents === null) return { text: "Unavailable", quiet: true };
-  const quantity = card.quantity === null ? null : formatQuantity(card.quantity);
-  const emptyRegister = card.cents === 0 && (card.quantity === null || card.quantity === 0);
-  if (emptyRegister) return { text: "No sales yet.", quiet: true };
-  if (quantity === null) return null;
-  return { text: `${quantity} ${countNoun(card)}`, quiet: false };
+  if (card.quantity !== null) {
+    const quantity = formatQuantity(card.quantity);
+    if (quantity !== null) return { text: `${quantity} ${countNoun(card)}`, quiet: false };
+  }
+  if (card.cents === 0) return { text: "No sales yet.", quiet: true };
+  return null;
 }
 
 function PosCard({ card }: { card: DisplayCard }) {

@@ -32,7 +32,7 @@ export function sampleSnapshot(now: Date): PublicSnapshot {
       card("st-pius", "St. Pius", 152000, 214, asOf, "beers"),
       card("bikers", "Bikers", 121000, 176, asOf, "beers"),
       card("songwriters", "Songwriters", 98000, 142, asOf, "beers"),
-      card("emerald", "Emerald", 91050, 128, asOf, "beers"),
+      card("emerald", "Emerald", 0, 0, asOf, "beers"),
       card("merch", "Merch", 110500, 48, asOf),
       card("food", "Food", 301075, 290, asOf),
     ],
