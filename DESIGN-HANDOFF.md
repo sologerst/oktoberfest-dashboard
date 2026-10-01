@@ -106,7 +106,7 @@ Empty days list (festival over, or no dated tickets yet): DM Sans `text-white/50
 
 A Bebas line, same style as the tickets kicker: `ON-SITE SALES`.
 
-Three on-site cards use one column, two from `sm`, and three from `xl`. Four or more cards use four columns from `lg`, so eight cards are two rows of four. Each card stays inside its grid cell.
+When the snapshot marks one card as the total and others as booths, the total sits on the left at a larger size and the booths fill a grid beside it. Merch and food, marked as other, sit in a short row under that pair. Snapshots without those marks keep the even grid: three cards use one column, two from `sm`, and three from `xl`. Four or more use four columns from `lg`. Each card stays inside its cell.
 
 Each card:
 

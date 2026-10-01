@@ -116,7 +116,25 @@ function assembleCards(
     if (def) byId.set(def.id, rollupOf(def, byId, config, now));
   }
   for (const def of pending) byId.set(def.id, rollupOf(def, byId, config, now));
-  return config.cards.map((card) => byId.get(card.id) ?? displayFrom(card.id, card.label, emptyMoneyCard("error", "Card missing.")));
+  const placeOf = cardPlaces(config);
+  return config.cards.map((card) => {
+    const shown = byId.get(card.id) ?? displayFrom(card.id, card.label, emptyMoneyCard("error", "Card missing."));
+    return { ...shown, place: placeOf.get(card.id) ?? "other" };
+  });
+}
+
+/** The outermost total is the hero. Cards inside a total are booths. Everything else is secondary. */
+function cardPlaces(config: PosConfig): Map<CardId, NonNullable<DisplayCard["place"]>> {
+  const booths = new Set(config.cards.flatMap((card) => card.rollsUp));
+  const totals = config.cards.filter((card) => card.rollsUp.length > 0 && !booths.has(card.id));
+  const totalIds = new Set((totals.length > 0 ? totals : config.cards.filter((card) => card.rollsUp.length > 0)).map((card) => card.id));
+  const places = new Map<CardId, NonNullable<DisplayCard["place"]>>();
+  for (const card of config.cards) {
+    if (totalIds.has(card.id)) places.set(card.id, "total");
+    else if (booths.has(card.id)) places.set(card.id, "booth");
+    else places.set(card.id, "other");
+  }
+  return places;
 }
 
 function messageOf(error: unknown): string {

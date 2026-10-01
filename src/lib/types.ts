@@ -10,11 +10,15 @@ export type MoneyCard = {
   error: string | null;
 };
 
+/** Where a card sits on the board. Omitted on older snapshots, which keep the even grid. */
+export type CardPlace = "total" | "booth" | "other";
+
 export type DisplayCard = MoneyCard & {
   id: CardId;
   label: string;
   /** Word after the programmed item count. Blank uses item/items. Omitted on older snapshots. */
   quantityLabel?: string | null;
+  place?: CardPlace;
 };
 
 export type DayLine = {

@@ -25,12 +25,29 @@ export function dayColumnClass(count: number): string {
   return "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4";
 }
 
-/** Eight booth cards are two rows of four, so they do not stack on top of each other. */
+/** Even grid used when the snapshot has no total-and-booth grouping. */
 export function posColumnClass(count: number): string {
   if (count <= 1) return "grid-cols-1";
   if (count === 2) return "grid-cols-1 sm:grid-cols-2";
   if (count === 3) return "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3";
   return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
+}
+
+export function boothColumnClass(count: number): string {
+  if (count <= 1) return "grid-cols-1";
+  if (count <= 4) return "grid-cols-1 sm:grid-cols-2";
+  return "grid-cols-2 xl:grid-cols-3";
+}
+
+/** One total beside its booths, with merch and food in a shorter row. Older snapshots stay on the even grid. */
+export function groupOnSite(cards: DisplayCard[]): { total: DisplayCard; booths: DisplayCard[]; other: DisplayCard[] } | null {
+  if (cards.length === 0 || cards.some((card) => !card.place)) return null;
+  const totals = cards.filter((card) => card.place === "total");
+  const booths = cards.filter((card) => card.place === "booth");
+  if (totals.length !== 1 || booths.length === 0) return null;
+  const total = totals[0];
+  if (!total) return null;
+  return { total, booths, other: cards.filter((card) => card.place === "other") };
 }
 
 export function dayBarPercent(count: number | null, max: number): number {
@@ -165,11 +182,11 @@ function posSubtitle(card: DisplayCard): { text: string; quiet: boolean } | null
   return { text: `${quantity} ${countNoun(card)}`, quiet: false };
 }
 
-function PosCard({ card }: { card: DisplayCard }) {
+function PosCard({ card, hero = false }: { card: DisplayCard; hero?: boolean }) {
   const subtitle = posSubtitle(card);
   const unavailable = card.cents === null;
   return (
-    <article className={tileClass}>
+    <article className={`${tileClass} ${hero ? "sales-tile-hero" : ""}`}>
       <p className={tileLabelClass}>{card.label}</p>
       <p className={`font-display text-figure mt-3 font-bold tabular-nums whitespace-nowrap ${unavailable ? "text-white" : "text-mark"}`}>
         {formatCents(card.cents)}
@@ -178,6 +195,55 @@ function PosCard({ card }: { card: DisplayCard }) {
         {subtitle?.text ?? "\u00a0"}
       </p>
     </article>
+  );
+}
+
+function CompactCard({ card }: { card: DisplayCard }) {
+  const subtitle = posSubtitle(card);
+  const unavailable = card.cents === null;
+  return (
+    <article className="sales-tile sales-tile-compact @container flex h-full min-h-0 flex-row items-center gap-4 overflow-hidden rounded-sm border border-white/10 bg-card px-5 py-2 lg:gap-5 lg:px-6">
+      <p className="font-label text-[clamp(1.2rem,3.2cqi,1.7rem)] leading-none text-white/80">{card.label}</p>
+      <p className={`font-display text-figure font-bold tabular-nums whitespace-nowrap ${unavailable ? "text-white" : "text-mark"}`}>
+        {formatCents(card.cents)}
+      </p>
+      <p className={`min-w-0 truncate text-[clamp(0.85rem,2cqi,1.05rem)] leading-none ${subtitle?.quiet ? "text-white/55" : "text-white/65"}`}>
+        {subtitle?.text ?? ""}
+      </p>
+    </article>
+  );
+}
+
+function OnSiteGrid({ cards }: { cards: DisplayCard[] }) {
+  const grouped = groupOnSite(cards);
+  if (!grouped) {
+    return (
+      <div className={`grid h-full min-h-0 flex-1 auto-rows-fr gap-3 ${posColumnClass(cards.length)}`}>
+        {cards.map((card) => (
+          <PosCard key={card.id} card={card} />
+        ))}
+      </div>
+    );
+  }
+  const otherCols = grouped.other.length <= 1 ? "grid-cols-1" : grouped.other.length === 2 ? "grid-cols-2" : "grid-cols-3";
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(16rem,0.95fr)_minmax(0,1.25fr)]">
+        <PosCard card={grouped.total} hero />
+        <div className={`grid h-full min-h-0 auto-rows-fr gap-3 ${boothColumnClass(grouped.booths.length)}`}>
+          {grouped.booths.map((card) => (
+            <PosCard key={card.id} card={card} />
+          ))}
+        </div>
+      </div>
+      {grouped.other.length > 0 ? (
+        <div className={`grid h-[4.75rem] shrink-0 gap-3 ${otherCols}`}>
+          {grouped.other.map((card) => (
+            <CompactCard key={card.id} card={card} />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -223,6 +289,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
   const ticketsStale = snapshot.tickets.status === "stale";
   const posStale = sectionStale(snapshot.cards);
   const manyCards = snapshot.cards.length > 3;
+  const grouped = groupOnSite(snapshot.cards) !== null;
   const scanDay = formatFestivalDay(snapshot.tickets.asOf ?? snapshot.generatedAt);
 
   return (
@@ -247,7 +314,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col gap-3 p-4 lg:gap-4 lg:p-5">
-        <section className={`flex min-h-0 flex-col gap-2 ${manyCards ? "flex-[0.85]" : "flex-1"}`}>
+        <section className={`flex min-h-0 flex-col gap-2 ${grouped ? "flex-[0.68]" : manyCards ? "flex-[0.85]" : "flex-1"}`}>
           <h2 className="shrink-0 font-label text-lg text-white/60 lg:text-xl">
             Tickets
             {ticketsStale ? <span className="text-mark"> · Stale</span> : <span> · Refreshes every {SNAPSHOT_MAX_AGE_MS / 1000}s</span>}
@@ -256,16 +323,12 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
           <TicketStats tickets={snapshot.tickets} scanDay={scanDay} />
         </section>
         <DayRows tickets={snapshot.tickets} stale={ticketsStale} />
-        <section className={`flex min-h-0 flex-col gap-2 ${manyCards ? "flex-[1.7]" : "flex-1"}`}>
+        <section className={`flex min-h-0 flex-col gap-2 ${grouped ? "flex-[2]" : manyCards ? "flex-[1.7]" : "flex-1"}`}>
           <h2 className="shrink-0 font-label text-lg text-white/60 lg:text-xl">
             On-site sales
             {posStale ? <span className="text-mark"> · Stale</span> : null}
           </h2>
-          <div className={`grid h-full min-h-0 flex-1 auto-rows-fr gap-3 ${posColumnClass(snapshot.cards.length)}`}>
-            {snapshot.cards.map((card) => (
-              <PosCard key={card.id} card={card} />
-            ))}
-          </div>
+          <OnSiteGrid cards={snapshot.cards} />
         </section>
       </main>
     </div>
