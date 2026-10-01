@@ -7,7 +7,7 @@ The screen polls a snapshot every 30 seconds. When that snapshot is older than 3
 ## What the screen shows
 
 - Tickets sold today (count and dollars) and unique scans for today's festival date.
-- Sold tickets for each remaining festival day: Thursday Oct 1 (complimentary Community Day), Friday Oct 2, Saturday Oct 3, and Sunday Oct 4, 2026. Days already past drop off.
+- Sold tickets for each remaining festival day: Thursday Oct 1 (complimentary Community Day), Friday Oct 2, Saturday Oct 3, and Sunday Oct 4, 2026. Days already past drop off. These counts reload with the rest of the ticket snapshot every 30 seconds, including weekend passes and undated tickets.
 - Weekend passes on their own line. Undated `ga`, `vip`, `ga-comp`, and `vip-any-day` tickets show as **day not recorded**. Dated complimentary tickets stay on the day stored in `tickets.validDate`. They are not guessed back into a date.
 - Beer, merch, and food dollars. A card also shows a count when its setup lists the variation ids to count.
 
