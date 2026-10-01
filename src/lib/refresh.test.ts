@@ -72,6 +72,31 @@ describe("snapshot refresh", () => {
     expect(shown(snapshot, "beer")?.cents).toBe(2500);
   });
 
+  it("replaces remaining-day counts when tickets are read again", async () => {
+    const snapshot = await buildSnapshot({
+      now: new Date("2026-10-03T22:00:00.000Z"),
+      previous: previous("2026-10-03T21:00:00.000Z"),
+      config: ready,
+      loadTickets: async () => ({
+        ...numbers,
+        days: [
+          { date: "2026-10-03", label: "Saturday, Oct 3", count: 11 },
+          { date: "2026-10-04", label: "Sunday, Oct 4", count: 7 },
+        ],
+        weekendPasses: 5,
+        dayNotRecorded: 2,
+      }),
+      loadSquare: async () => ({ cards: {}, state: null }),
+    });
+    expect(snapshot.public.tickets.days).toEqual([
+      { date: "2026-10-03", label: "Saturday, Oct 3", count: 11 },
+      { date: "2026-10-04", label: "Sunday, Oct 4", count: 7 },
+    ]);
+    expect(snapshot.public.tickets.weekendPasses).toBe(5);
+    expect(snapshot.public.tickets.dayNotRecorded).toBe(2);
+    expect(snapshot.public.tickets.status).toBe("ok");
+  });
+
   it("keeps same-day Square totals when Square fails and still updates tickets", async () => {
     const snapshot = await buildSnapshot({
       now: new Date("2026-10-03T22:00:00.000Z"),
