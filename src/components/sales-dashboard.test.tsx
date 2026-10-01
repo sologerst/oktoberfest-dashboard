@@ -71,6 +71,8 @@ describe("sales screen", () => {
     expect(markup).toContain("style=\"width:100%\"");
     expect(markup).toContain("style=\"width:75%\"");
     expect(markup).toContain("style=\"width:0%\"");
+    expect(markup).toContain("Sold for remaining days");
+    expect(markup).toContain("Refreshes every 30s");
     expect(markup).toContain("Weekend passes");
     expect(markup).toContain("Day not recorded");
     expect(markup).toContain("612 items");

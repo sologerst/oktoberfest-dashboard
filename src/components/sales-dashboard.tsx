@@ -83,7 +83,7 @@ function TicketStats({ tickets, scanDay }: { tickets: TicketBoard; scanDay: stri
   );
 }
 
-function DayRows({ tickets }: { tickets: TicketBoard }) {
+function DayRows({ tickets, stale }: { tickets: TicketBoard; stale: boolean }) {
   const max = largestDayCount(tickets.days);
   const hasDays = tickets.days.length > 0;
   const showWeekend = hasDays || (tickets.weekendPasses !== null && tickets.weekendPasses > 0);
@@ -92,7 +92,10 @@ function DayRows({ tickets }: { tickets: TicketBoard }) {
     tickets.days.length === 1 ? "grid-cols-1" : tickets.days.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3";
   return (
     <section className="shrink-0 rounded-sm border border-white/10 bg-card px-7 py-5 lg:px-9 lg:py-6">
-      <h2 className="mb-4 font-label text-xl text-white/70 lg:text-2xl">Sold for remaining days</h2>
+      <h2 className="mb-4 font-label text-xl text-white/70 lg:text-2xl">
+        Sold for remaining days
+        {stale ? <span className="text-mark"> · Stale</span> : <span className="text-white/55"> · Refreshes every {SNAPSHOT_MAX_AGE_MS / 1000}s</span>}
+      </h2>
       {hasDays ? (
         <div className={`grid gap-6 ${dayColumns}`}>
           {tickets.days.map((day) => {
@@ -237,7 +240,7 @@ export function SalesDashboard({ initial, sample }: { initial: PublicSnapshot; s
           {snapshot.tickets.error ? <p className="text-sm text-white/70">{snapshot.tickets.error}</p> : null}
           <TicketStats tickets={snapshot.tickets} scanDay={scanDay} />
         </section>
-        <DayRows tickets={snapshot.tickets} />
+        <DayRows tickets={snapshot.tickets} stale={ticketsStale} />
         <section className="flex min-h-0 flex-1 flex-col gap-3">
           <h2 className="shrink-0 font-label text-lg text-white/60 lg:text-xl">
             On-site sales
