@@ -9,7 +9,10 @@ export type PosCardConfig = {
   locationIds: string[];
   catalogObjectIds: string[];
   categoryIds: string[];
-  /** Variation ids whose quantities are shown under the dollar total. Empty means dollars only. */
+  /**
+   * Ids that turn on the count under the dollars. Empty means dollars only.
+   * On a category card with no separate item list, the count includes every variation in the category.
+   */
   countItemIds: string[];
   /** Word after that count, such as "beers". Empty uses item/items. */
   countLabel: string;
@@ -268,6 +271,7 @@ function hasRollupCycle(cards: PosCardConfig[]): boolean {
 export function posFingerprint(config: PosConfig): string {
   return JSON.stringify({
     attribution: "location",
+    countMatch: "category",
     cards: config.cards.map((card) => ({
       id: card.id,
       locationIds: [...card.locationIds].sort(),

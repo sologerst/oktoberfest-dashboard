@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chicagoDayBounds } from "@/lib/time";
 import type { PosCardConfig, PosConfig } from "@/lib/pos-config";
 import {
+  countIdsForCard,
   foldOrders,
   locationMembership,
   pullPos,
@@ -271,6 +272,70 @@ describe("Square card totals", () => {
     });
     expect(pulled.cards.proverbs).toMatchObject({ status: "ok", cents: 1000, quantity: 2 });
     expect(pulled.cards.pius).toMatchObject({ status: "ok", cents: 400, quantity: 1 });
+  });
+
+  it("counts every category variation when the pasted count id is the item, not the variation on the order", async () => {
+    const fetchImpl: typeof fetch = async (url) => {
+      if (String(url).includes("catalog")) {
+        return new Response(
+          JSON.stringify({
+            items: [{ id: "item-1", item_data: { variations: [{ id: "var-a" }, { id: "var-b" }] } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          orders: [
+            {
+              id: "bikers-order",
+              location_id: "L-BIKERS",
+              state: "COMPLETED",
+              closed_at: "2026-10-03T18:00:00.000Z",
+              updated_at: "2026-10-03T18:00:00.000Z",
+              line_items: [
+                { catalog_object_id: "var-b", quantity: "3", total_money: { amount: 4200 } },
+                { catalog_object_id: "not-beer", quantity: "1", total_money: { amount: 500 } },
+              ],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    const pos: PosConfig = {
+      cards: [
+        {
+          ...blank("bikers", "Bikers"),
+          locationIds: ["L-BIKERS"],
+          categoryIds: ["CAT"],
+          countItemIds: ["item-1"],
+          countLabel: "Beer",
+        },
+      ],
+    };
+    const pulled = await pullPos({
+      config: pos,
+      state: null,
+      now: new Date("2026-10-03T20:00:00.000Z"),
+      token: "token",
+      environment: "production",
+      fetchImpl,
+    });
+    expect(pulled.cards.bikers).toMatchObject({ status: "ok", cents: 4200, quantity: 3 });
+    expect(countIdsForCard(pos.cards[0]!, ["item-1", "var-a", "var-b"]).has("var-b")).toBe(true);
+  });
+
+  it("keeps a listed-item card counting only those ids", () => {
+    const categoryAndItems = {
+      ...blank("booth", "Booth"),
+      catalogObjectIds: ["mug"],
+      categoryIds: ["CAT"],
+      countItemIds: ["mug"],
+    };
+    expect([...countIdsForCard(categoryAndItems, ["mug", "var-1", "var-2"])]).toEqual(["mug"]);
+    const itemsOnly = { ...blank("merch", "Merch"), catalogObjectIds: ["mug", "shirt"], countItemIds: ["mug"] };
+    expect([...countIdsForCard(itemsOnly, [])]).toEqual(["mug"]);
   });
 
   it("does not call Square when no card is configured", async () => {
