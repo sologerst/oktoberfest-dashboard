@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { dayBarPercent, SalesDashboard } from "@/components/sales-dashboard";
+import { dayBarPercent, dayColumnClass, posColumnClass, SalesDashboard } from "@/components/sales-dashboard";
 import type { DisplayCard, MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
 
 function money(
@@ -51,6 +51,39 @@ function html(value: PublicSnapshot, sample = false): string {
 }
 
 describe("sales screen", () => {
+  it("puts four festival days on one row and eight booths on two rows", () => {
+    expect(dayColumnClass(4)).toContain("xl:grid-cols-4");
+    expect(dayColumnClass(3)).toContain("xl:grid-cols-3");
+    expect(posColumnClass(8)).toContain("lg:grid-cols-4");
+    expect(posColumnClass(3)).toContain("xl:grid-cols-3");
+    const markup = html(
+      snapshot({
+        tickets: tickets({
+          days: [
+            { date: "2026-10-01", label: "Thursday, Oct 1", count: 3299 },
+            { date: "2026-10-02", label: "Friday, Oct 2", count: 3234 },
+            { date: "2026-10-03", label: "Saturday, Oct 3", count: 1214 },
+            { date: "2026-10-04", label: "Sunday, Oct 4", count: 389 },
+          ],
+        }),
+        cards: [
+          money("beer", "Beer", 0, 0),
+          money("proverbs", "Proverbs", 0, 0, "ok", "beers"),
+          money("st-pius", "St. Pius", 0, 0, "ok", "beers"),
+          money("bikers", "Bikers", 0, 0, "ok", "beers"),
+          money("songwriters", "Songwriters", 0, 0, "ok", "beers"),
+          money("emerald", "Emerald", 0, 0, "ok", "beers"),
+          money("merch", "Merch", 0, 0),
+          money("food", "Food", 0, 0),
+        ],
+      }),
+    );
+    expect(markup).toContain("xl:grid-cols-4");
+    expect(markup).toContain("lg:grid-cols-4");
+    expect(markup).toContain("Proverbs");
+    expect(markup).toContain("Sunday, Oct 4");
+  });
+
   it("sizes day bars against the busiest remaining day", () => {
     expect(dayBarPercent(240, 240)).toBe(100);
     expect(dayBarPercent(180, 240)).toBe(75);
@@ -119,7 +152,7 @@ describe("sales screen", () => {
     expect(markup).toContain("password authentication failed");
     expect(markup).toContain("No sales yet.");
     expect(markup).not.toContain("config/pos-categories.yaml");
-    expect(markup).not.toContain("$0.00</p><p class=\"mt-4 min-h-[2.75em] text-[clamp(1.25rem,3cqi,1.55rem)] leading-snug text-white/55\">Unavailable");
+    expect(markup).not.toContain("$0.00</p><p class=\"mt-2 min-h-[2.2em] text-[clamp(0.95rem,2.4cqi,1.3rem)] leading-snug text-white/55\">Unavailable");
   });
 
   it("marks a stale source on its section and an old snapshot in the header", () => {

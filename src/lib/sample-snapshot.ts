@@ -27,7 +27,12 @@ export function sampleSnapshot(now: Date): PublicSnapshot {
       error: null,
     },
     cards: [
-      card("beer", "Beer", 422050, 612, asOf, "beers"),
+      card("beer", "Beer", 842050, 1204, asOf, "beers"),
+      card("proverbs", "Proverbs", 180000, 260, asOf, "beers"),
+      card("st-pius", "St. Pius", 152000, 214, asOf, "beers"),
+      card("bikers", "Bikers", 121000, 176, asOf, "beers"),
+      card("songwriters", "Songwriters", 98000, 142, asOf, "beers"),
+      card("emerald", "Emerald", 91050, 128, asOf, "beers"),
       card("merch", "Merch", 110500, 48, asOf),
       card("food", "Food", 301075, 290, asOf),
     ],

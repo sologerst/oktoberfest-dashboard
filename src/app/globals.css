@@ -28,11 +28,25 @@
   min-height: 100dvh;
 }
 
-@media (min-width: 1280px) and (min-height: 1000px) {
+.sales-tile {
+  min-height: 11rem;
+  container-type: inline-size;
+}
+
+@media (min-width: 1280px) and (min-height: 800px) {
   .sales-screen {
     height: 100dvh;
     max-height: 100dvh;
     overflow: hidden;
+  }
+
+  .sales-tile {
+    min-height: 0;
+    container-type: size;
+  }
+
+  .sales-tile .text-figure {
+    font-size: clamp(3.25rem, min(14cqi, 32cqb), 6rem);
   }
 }
 
