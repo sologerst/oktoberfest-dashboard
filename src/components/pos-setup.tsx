@@ -210,7 +210,7 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
       </header>
       <main className="mx-auto max-w-3xl space-y-6 p-6">
         <p className="text-sm text-white/70">
-          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths. To show a count as well as the dollars, paste the variation ids you want counted. The dollar amount still includes every item on the card.
+          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. The same item or category can be on every booth. Each card counts sales of those items only at its own locations. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths. To show a count as well as the dollars, paste the variation ids you want counted. The dollar amount still includes every item on the card.
         </p>
         {drafts.map((draft, index) => (
           <section key={draft.id} className="space-y-4 rounded-sm border border-white/10 bg-card p-5">
@@ -269,14 +269,14 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   value={draft.items}
                   onChange={(items) => update(index, { items })}
                   placeholder="Variation id from the Square item library"
-                  hint="One per line. An item on two cards stops those cards."
+                  hint="One per line. The same item can be on cards for different locations. Each card counts that item only at its own locations."
                 />
                 <Field
                   label="Category ids"
                   value={draft.categories}
                   onChange={(categories) => update(index, { categories })}
                   placeholder="Optional category id"
-                  hint="Optional. A category includes every variation in it, which is the easier way to group alcohol, merch, or food."
+                  hint="Optional. A category includes every variation in it. The same category can be on cards for different locations. Each card counts it only at its own locations."
                 />
                 <Field
                   label="Count these items"
