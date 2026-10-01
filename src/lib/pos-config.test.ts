@@ -69,19 +69,43 @@ describe("POS config", () => {
     ).toThrow(/loop/i);
   });
 
-  it("rejects an item or category listed on two cards", () => {
+  it("allows a shared category on different locations and rejects it on one location", () => {
+    const shared = (locationIds: string[]) => ({
+      locationIds,
+      catalogObjectIds: [],
+      categoryIds: ["GKP7B3ZOZJHJPXSPD4OWZH3L"],
+      countItemIds: ["JD322M3HRSEZLDT7NLMRKDLH"],
+      countLabel: "beers",
+      rollsUp: [],
+    });
+    const config = validatePosConfig([
+      { id: "proverbs", label: "Proverbs", ...shared(["LP"]) },
+      { id: "pius", label: "St. Pius", ...shared(["LS"]) },
+      { id: "songwriters", label: "Songwriters", ...shared(["LW"]) },
+      { id: "emerald", label: "Emerald", ...shared(["LE"]) },
+      { id: "bikers", label: "Bikers", ...shared(["LB"]) },
+      { id: "beer", label: "Beer", rollsUp: ["proverbs", "pius", "songwriters", "emerald", "bikers"] },
+    ]);
+    expect(config.cards.map((card) => card.label)).toEqual([
+      "Proverbs",
+      "St. Pius",
+      "Songwriters",
+      "Emerald",
+      "Bikers",
+      "Beer",
+    ]);
+    expect(() =>
+      validatePosConfig([
+        { id: "proverbs", label: "Proverbs", ...shared(["LP"]) },
+        { id: "pius", label: "St. Pius", ...shared(["LP"]) },
+      ]),
+    ).toThrow(/Category GKP7B3ZOZJHJPXSPD4OWZH3L is on Proverbs and St\. Pius for location LP/);
     expect(() =>
       validatePosConfig([
         { id: "north", label: "North", locationIds: ["L1"], catalogObjectIds: ["beer"], categoryIds: [], rollsUp: [] },
-        { id: "south", label: "South", locationIds: ["L2"], catalogObjectIds: ["beer"], categoryIds: [], rollsUp: [] },
+        { id: "south", label: "South", locationIds: ["L1"], catalogObjectIds: ["beer"], categoryIds: [], rollsUp: [] },
       ]),
-    ).toThrow(/Item beer is on North and South/);
-    expect(() =>
-      validatePosConfig([
-        { id: "north", label: "North", locationIds: ["L1"], catalogObjectIds: [], categoryIds: ["CAT"], rollsUp: [] },
-        { id: "south", label: "South", locationIds: ["L2"], catalogObjectIds: [], categoryIds: ["CAT"], rollsUp: [] },
-      ]),
-    ).toThrow(/Category CAT is on North and South/);
+    ).toThrow(/Item beer is on North and South for location L1/);
   });
 
   it("rejects a total that counts the same booth twice", () => {

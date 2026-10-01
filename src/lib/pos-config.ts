@@ -155,42 +155,26 @@ export function validatePosConfig(value: unknown): PosConfig {
   });
 
   const ids = new Set(cards.map((card) => card.id));
-  const itemOwners = new Map<string, string[]>();
-  const categoryOwners = new Map<string, string[]>();
   for (const card of cards) {
-    if (card.rollsUp.length > 0) {
-      for (const source of card.rollsUp) {
-        if (source === card.id) throw new Error(`${card.label} cannot include itself.`);
-        if (!ids.has(source)) throw new Error(`${card.label} totals a card that does not exist.`);
-      }
-      continue;
+    if (card.rollsUp.length === 0) continue;
+    for (const source of card.rollsUp) {
+      if (source === card.id) throw new Error(`${card.label} cannot include itself.`);
+      if (!ids.has(source)) throw new Error(`${card.label} totals a card that does not exist.`);
     }
-    claim(itemOwners, card.catalogObjectIds, card.label);
-    claim(categoryOwners, card.categoryIds, card.label);
   }
-  rejectShared(itemOwners, "Item");
-  rejectShared(categoryOwners, "Category");
+  rejectSharedAtLocation(cards, "Item", (card) => card.catalogObjectIds);
+  rejectSharedAtLocation(cards, "Category", (card) => card.categoryIds);
 
-  const countOwners = new Map<string, string[]>();
   for (const card of cards) {
-    if (card.rollsUp.length > 0) continue;
-    if (card.categoryIds.length === 0) {
-      const allowed = new Set(card.catalogObjectIds);
-      for (const id of card.countItemIds) {
-        if (!allowed.has(id)) {
-          throw new Error(`${card.label} counts ${id}, but that item is not in its item ids.`);
-        }
-      }
-    }
-    claim(countOwners, card.countItemIds, card.label);
+    if (card.rollsUp.length > 0 || card.categoryIds.length > 0) continue;
+    const allowed = new Set(card.catalogObjectIds);
     for (const id of card.countItemIds) {
-      const others = (itemOwners.get(id) ?? []).filter((owner) => owner !== card.label);
-      if (others.length > 0) {
-        throw new Error(`Item ${id} is on ${others.join(" and ")}. Count it on that card.`);
+      if (!allowed.has(id)) {
+        throw new Error(`${card.label} counts ${id}, but that item is not in its item ids.`);
       }
     }
   }
-  rejectShared(countOwners, "Counted item");
+  rejectSharedAtLocation(cards, "Counted item", (card) => card.countItemIds);
   if (hasRollupCycle(cards)) throw new Error("Card totals cannot loop. A total cannot include itself through other totals.");
   const duplicated = duplicatedRollup(cards);
   if (duplicated) throw new Error(duplicated);
@@ -204,18 +188,35 @@ export function validatePosConfig(value: unknown): PosConfig {
   return { cards };
 }
 
-function claim(owners: Map<string, string[]>, ids: string[], label: string) {
-  for (const id of ids) {
-    const list = owners.get(id) ?? [];
-    list.push(label);
-    owners.set(id, list);
+function rejectSharedAtLocation(
+  cards: PosCardConfig[],
+  kind: "Item" | "Category" | "Counted item",
+  idsOf: (card: PosCardConfig) => string[],
+) {
+  const owners = new Map<string, PosCardConfig[]>();
+  for (const card of cards) {
+    if (card.rollsUp.length > 0) continue;
+    for (const id of new Set(idsOf(card))) {
+      const list = owners.get(id) ?? [];
+      list.push(card);
+      owners.set(id, list);
+    }
   }
-}
-
-function rejectShared(owners: Map<string, string[]>, kind: "Item" | "Category" | "Counted item") {
-  for (const [id, labels] of owners) {
-    if (labels.length > 1) {
-      throw new Error(`${kind} ${id} is on ${labels.join(" and ")}. Put it on one card.`);
+  for (const [id, group] of owners) {
+    const byLocation = new Map<string, string[]>();
+    for (const card of group) {
+      for (const locationId of card.locationIds) {
+        const labels = byLocation.get(locationId) ?? [];
+        labels.push(card.label);
+        byLocation.set(locationId, labels);
+      }
+    }
+    for (const [locationId, labels] of byLocation) {
+      if (labels.length > 1) {
+        throw new Error(
+          `${kind} ${id} is on ${labels.join(" and ")} for location ${locationId}. Each location can count it on one card.`,
+        );
+      }
     }
   }
 }
@@ -265,8 +266,9 @@ function hasRollupCycle(cards: PosCardConfig[]): boolean {
 
 /** Busts the Square order cache when locations or items change. */
 export function posFingerprint(config: PosConfig): string {
-  return JSON.stringify(
-    config.cards.map((card) => ({
+  return JSON.stringify({
+    attribution: "location",
+    cards: config.cards.map((card) => ({
       id: card.id,
       locationIds: [...card.locationIds].sort(),
       catalogObjectIds: [...card.catalogObjectIds].sort(),
@@ -274,5 +276,5 @@ export function posFingerprint(config: PosConfig): string {
       countItemIds: [...card.countItemIds].sort(),
       rollsUp: [...card.rollsUp].sort(),
     })),
-  );
+  });
 }

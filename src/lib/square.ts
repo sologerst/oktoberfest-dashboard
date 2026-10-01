@@ -28,6 +28,7 @@ type SquareLine = {
 };
 type SquareOrder = {
   id?: string;
+  location_id?: string;
   state?: string;
   closed_at?: string;
   updated_at?: string;
@@ -60,43 +61,64 @@ function errorCard(error: string): CardAttempt {
   return { status: "error", cents: null, quantity: null, error };
 }
 
-export function expandedMembership(
+export type CardForCatalog = (locationId: string | undefined, catalogId: string) => CardId | null;
+
+/**
+ * A catalog item can sit on several cards. The sale counts on the card whose
+ * locations include the order's Square location. Two cards that share both a
+ * location and an item are failed so the sale is not counted twice.
+ */
+export function locationMembership(
   config: PosConfig,
   categoryObjects: Record<CardId, string[]>,
 ): {
-  membership: Map<string, CardId>;
+  cardFor: CardForCatalog;
   failed: Set<CardId>;
 } {
-  const idsByCard = new Map<CardId, Set<string>>();
-  for (const card of config.cards) {
-    if (card.rollsUp.length > 0) continue;
-    idsByCard.set(
-      card.id,
-      new Set([...card.catalogObjectIds, ...(categoryObjects[card.id] ?? [])]),
-    );
-  }
+  const placements = config.cards
+    .filter((card) => card.rollsUp.length === 0)
+    .map((card) => ({
+      id: card.id,
+      locations: card.locationIds,
+      catalogIds: new Set([...card.catalogObjectIds, ...(categoryObjects[card.id] ?? [])]),
+    }));
 
-  const owners = new Map<string, CardId[]>();
-  for (const card of config.cards) {
-    if (card.rollsUp.length > 0) continue;
-    for (const id of idsByCard.get(card.id) ?? []) {
-      const list = owners.get(id) ?? [];
-      list.push(card.id);
-      owners.set(id, list);
-    }
-  }
-
+  const owner = new Map<string, CardId>();
+  const blocked = new Set<string>();
   const failed = new Set<CardId>();
-  const membership = new Map<string, CardId>();
-  for (const [id, cards] of owners) {
-    if (cards.length > 1) {
-      for (const card of cards) failed.add(card);
-      continue;
+  for (const card of placements) {
+    for (const locationId of card.locations) {
+      for (const catalogId of card.catalogIds) {
+        const key = `${locationId}\0${catalogId}`;
+        if (blocked.has(key)) {
+          failed.add(card.id);
+          continue;
+        }
+        const existing = owner.get(key);
+        if (existing && existing !== card.id) {
+          failed.add(existing);
+          failed.add(card.id);
+          owner.delete(key);
+          blocked.add(key);
+        } else {
+          owner.set(key, card.id);
+        }
+      }
     }
-    const [card] = cards;
-    if (card) membership.set(id, card);
   }
-  return { membership, failed };
+  for (const [key, cardId] of owner) {
+    if (failed.has(cardId)) owner.delete(key);
+  }
+
+  return {
+    failed,
+    cardFor(locationId, catalogId) {
+      if (!locationId) return null;
+      const cardId = owner.get(`${locationId}\0${catalogId}`);
+      if (!cardId || failed.has(cardId)) return null;
+      return cardId;
+    },
+  };
 }
 
 function lineCents(line: SquareLine): number {
@@ -117,18 +139,18 @@ function lineQuantity(line: SquareLine): { quantity: number; known: boolean } {
 
 export function contributionForOrder(
   order: SquareOrder,
-  membership: Map<string, CardId>,
-  countIds: ReadonlySet<string>,
+  cardFor: CardForCatalog,
+  countIdsByCard: ReadonlyMap<CardId, ReadonlySet<string>>,
 ): SquareOrderContribution["cards"] {
   const cards: SquareOrderContribution["cards"] = {};
   for (const line of order.line_items ?? []) {
     const catalogId = line.catalog_object_id;
     if (!catalogId) continue;
-    const card = membership.get(catalogId);
+    const card = cardFor(order.location_id, catalogId);
     if (!card) continue;
     const current = cards[card] ?? { cents: 0, quantity: 0, quantityKnown: true };
     current.cents += lineCents(line);
-    if (countIds.has(catalogId)) {
+    if (countIdsByCard.get(card)?.has(catalogId)) {
       const quantity = lineQuantity(line);
       current.quantity += quantity.quantity;
       current.quantityKnown = current.quantityKnown && quantity.known;
@@ -156,8 +178,8 @@ export function foldOrders(input: {
   incoming: SquareOrder[];
   day: string;
   bounds: { start: string; end: string };
-  membership: Map<string, CardId>;
-  countIds: ReadonlySet<string>;
+  cardFor: CardForCatalog;
+  countIdsByCard: ReadonlyMap<CardId, ReadonlySet<string>>;
 }): SquareState {
   const base: SquareState =
     input.previous?.chicagoDay === input.day
@@ -179,7 +201,7 @@ export function foldOrders(input: {
     }
     base.orders[order.id] = {
       updatedAt: order.updated_at ?? updatedSince ?? input.bounds.start,
-      cards: contributionForOrder(order, input.membership, input.countIds),
+      cards: contributionForOrder(order, input.cardFor, input.countIdsByCard),
     };
   }
   base.updatedSince = updatedSince;
@@ -344,7 +366,7 @@ function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType
       continue;
     }
     if (failed.has(card)) {
-      cards[card] = errorCard("A catalog item on this card is also listed on another card.");
+      cards[card] = errorCard("An item on this card is also on another card for the same location.");
       continue;
     }
     if (!totals || error) {
@@ -389,14 +411,14 @@ export async function pullPos(input: {
       readiness[card.id] === "ready" ? await expandCategory(client, card.categoryIds) : [];
   }
 
-  const { membership, failed } = expandedMembership(input.config, categoryObjects);
-  const countIds = new Set(input.config.cards.flatMap((card) => card.countItemIds));
+  const { cardFor, failed } = locationMembership(input.config, categoryObjects);
+  const countIdsByCard = new Map(input.config.cards.map((card) => [card.id, new Set(card.countItemIds)]));
   const counting = new Set(input.config.cards.filter((card) => card.countItemIds.length > 0).map((card) => card.id));
   const sameConfig = input.state?.configFingerprint === fingerprint;
   const previous = input.state?.chicagoDay === day && sameConfig ? input.state : null;
   const locationIds = [...new Set(ready.flatMap((card) => card.locationIds))];
   const incoming = await searchOrders(client, locationIds, bounds, previous?.updatedSince ?? null);
-  const state = foldOrders({ previous, incoming, day, bounds, membership, countIds });
+  const state = foldOrders({ previous, incoming, day, bounds, cardFor, countIdsByCard });
   state.configFingerprint = fingerprint;
   return {
     cards: attemptsFrom(input.config, failed, totalsFromState(state, squareIds, failed, counting), null),
