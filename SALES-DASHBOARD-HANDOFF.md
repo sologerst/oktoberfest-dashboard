@@ -2,7 +2,7 @@
 
 Build a **separate** real-time sales dashboard for Nashville Oktoberfest 2026. Do not add it to the public festival site (`Oktoberfest Site`). That app’s database is the checkout and gate-scanning path. This dashboard reads it. It does not deploy with it, share its process, or write to it.
 
-Refresh every **60 seconds**. Timezone for every “today” and festival day is **America/Chicago**.
+Refresh every **30 seconds**. Timezone for every “today” and festival day is **America/Chicago**.
 
 ## What the screen shows
 
@@ -50,7 +50,7 @@ Ticket types (from `TICKET_PRICING_2026` in `server/db.ts`):
 
 ## Festival database reads
 
-Read-only. A SQL role with `SELECT` on the tables below is enough. Run the aggregates from this dashboard’s cron, not from the festival Next.js app. Once a minute is cheap. Do not add tables, mirrors, or write traffic to this database.
+Read-only. A SQL role with `SELECT` on the tables below is enough. Run the aggregates from this dashboard’s cron, not from the festival Next.js app. Every 30 seconds is cheap. Do not add tables, mirrors, or write traffic to this database.
 
 Connection: `DATABASE_URL` on the festival app (Drizzle + Postgres). Do not point the dashboard at the festival app’s server code. Query the tables.
 
@@ -125,7 +125,7 @@ Env:
 
 - New repo, new Vercel project, own subdomain. No shared deploy with the festival site.
 - One cron per minute: Square pull, then the ticket SQL, then write one snapshot.
-- The page polls that snapshot every 60 seconds. Show “as of {timestamp}”.
+- The page polls that snapshot every 30 seconds. Show “as of {timestamp}”.
 - If Square fails, keep the last good beer/merch/food numbers and show them stale. Do not fail the ticket section.
 - If the database read fails, keep the last good ticket numbers and show them stale. Do not fail the Square cards.
 - No auth baked into the public festival site. Protect this page (basic auth or an allowlist). It is an internal TV / office screen.

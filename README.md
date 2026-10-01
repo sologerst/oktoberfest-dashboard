@@ -2,7 +2,7 @@
 
 Internal sales screen for Nashville Oktoberfest 2026. It is a separate app from the public festival site. The festival database is read-only here. Beer, merch, and food come from Square POS orders.
 
-The screen polls a snapshot every 60 seconds. When that snapshot is older than a minute, the poll refreshes it once for every open screen: Square and ticket SQL run together, then one write to this app's own database. If that snapshot database is unreachable, ticket numbers still load from the festival database for the open screen. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update and the ticket section shows the database error.
+The screen polls a snapshot every 30 seconds. When that snapshot is older than 30 seconds, the poll refreshes it once for every open screen: Square and ticket SQL run together, then one write to this app's own database. If that snapshot database is unreachable, ticket numbers still load from the festival database for the open screen. If Square fails, the last good POS numbers for the same Chicago day stay up and are marked stale. If the ticket read fails, the POS cards still update and the ticket section shows the database error.
 
 ## What the screen shows
 
@@ -30,7 +30,7 @@ Open **Card setup** on the signed-in sales screen to map Square. Each card takes
 
 `npm run dev` serves the waiting screen with no credentials. `DASHBOARD_SAMPLE=1` shows sample numbers locally and is ignored in production.
 
-`vercel.json` pins the Next.js framework and clears a static output directory. These Vercel projects were created when the repo was only the handoff markdown, so a static preset looks for a `public` folder this app does not have and fails the deployment before `next build`. The same file schedules a backup refresh once a day (`0 17 * * *`, noon America/Chicago during daylight time). Hobby plans reject a cron that runs more often, and that rejection fails the deployment. While the screen is open it still refreshes a snapshot older than 60 seconds. On a Pro plan, change the schedule to `* * * * *`.
+`vercel.json` pins the Next.js framework and clears a static output directory. These Vercel projects were created when the repo was only the handoff markdown, so a static preset looks for a `public` folder this app does not have and fails the deployment before `next build`. The same file schedules a backup refresh once a day (`0 17 * * *`, noon America/Chicago during daylight time). Hobby plans reject a cron that runs more often, and that rejection fails the deployment. While the screen is open it still refreshes a snapshot older than 30 seconds. On a Pro plan, change the schedule to `* * * * *`.
 
 ## Checks
 

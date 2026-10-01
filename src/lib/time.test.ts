@@ -27,11 +27,11 @@ describe("Chicago time", () => {
     });
   });
 
-  it("refreshes a missing or minute-old snapshot", () => {
+  it("refreshes a missing or 30-second-old snapshot", () => {
     const now = new Date("2026-10-03T18:00:00.000Z");
     expect(snapshotNeedsRefresh(null, now)).toBe(true);
-    expect(snapshotNeedsRefresh("2026-10-03T17:59:00.000Z", now)).toBe(true);
-    expect(snapshotNeedsRefresh("2026-10-03T17:59:30.000Z", now)).toBe(false);
+    expect(snapshotNeedsRefresh("2026-10-03T17:59:30.000Z", now)).toBe(true);
+    expect(snapshotNeedsRefresh("2026-10-03T17:59:31.000Z", now)).toBe(false);
   });
 
   it("formats clock time with a CT suffix and a short festival day", () => {

@@ -77,7 +77,7 @@ describe("sales screen", () => {
     expect(markup).toContain("48 beers");
     expect(markup).toContain("No sales yet.");
     expect(markup).not.toContain("48 items");
-    expect(markup).toContain("Refreshes every 60s");
+    expect(markup).toContain("Refreshes every 30s");
   });
 
   it("hides a zero day-not-recorded row and omits a missing quantity", () => {
@@ -135,6 +135,6 @@ describe("sales screen", () => {
     expect(markup).toContain(">Stale<");
     expect(markup).toContain("· Stale");
     expect(markup).toContain("On-site sales");
-    expect(markup).not.toContain("Refreshes every 60s");
+    expect(markup).not.toContain("Refreshes every 30s");
   });
 });
