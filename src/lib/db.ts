@@ -422,7 +422,8 @@ function asCards(payload: Record<string, unknown>): DisplayCard[] {
       const record = entry as Record<string, unknown>;
       if (typeof record.id !== "string" || typeof record.label !== "string") return [];
       const quantityLabel = typeof record.quantityLabel === "string" ? record.quantityLabel.trim() : "";
-      return [{ id: record.id, label: record.label, quantityLabel: quantityLabel || null, ...asMoney(record) }];
+      const place = record.place === "total" || record.place === "booth" || record.place === "other" ? record.place : undefined;
+      return [{ id: record.id, label: record.label, quantityLabel: quantityLabel || null, ...(place ? { place } : {}), ...asMoney(record) }];
     });
   }
   return legacyCards(payload) ?? [];

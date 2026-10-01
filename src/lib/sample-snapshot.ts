@@ -2,8 +2,16 @@ import { chicagoDate } from "@/lib/time";
 import { remainingTicketedDates } from "@/lib/tickets";
 import type { DisplayCard, PublicSnapshot } from "@/lib/types";
 
-function card(id: string, label: string, cents: number, quantity: number, asOf: string, quantityLabel: string | null = null): DisplayCard {
-  return { id, label, cents, quantity, quantityLabel, asOf, status: "ok", error: null };
+function card(
+  id: string,
+  label: string,
+  cents: number,
+  quantity: number,
+  asOf: string,
+  place: DisplayCard["place"],
+  quantityLabel: string | null = null,
+): DisplayCard {
+  return { id, label, cents, quantity, quantityLabel, place, asOf, status: "ok", error: null };
 }
 
 /** Dev-only stand-in so the screen layout can be reviewed before credentials exist. */
@@ -27,14 +35,13 @@ export function sampleSnapshot(now: Date): PublicSnapshot {
       error: null,
     },
     cards: [
-      card("beer", "Beer", 842050, 1204, asOf, "beers"),
-      card("proverbs", "Proverbs", 180000, 260, asOf, "beers"),
-      card("st-pius", "St. Pius", 152000, 214, asOf, "beers"),
-      card("bikers", "Bikers", 121000, 176, asOf, "beers"),
-      card("songwriters", "Songwriters", 98000, 142, asOf, "beers"),
-      card("emerald", "Emerald", 91050, 128, asOf, "beers"),
-      card("merch", "Merch", 110500, 48, asOf),
-      card("food", "Food", 301075, 290, asOf),
+      card("beer", "Beer", 716400, 516, asOf, "total", "beers"),
+      card("proverbs", "Proverbs", 156000, 114, asOf, "booth", "beers"),
+      card("st-pius", "St. Pius", 229000, 164, asOf, "booth", "beers"),
+      card("bikers", "Bikers", 182200, 131, asOf, "booth", "beers"),
+      card("emerald", "Emerald", 149200, 107, asOf, "booth", "beers"),
+      card("merch", "Merch", 45500, 18, asOf, "other"),
+      card("food", "Food", 51700, 22, asOf, "other"),
     ],
   };
 }

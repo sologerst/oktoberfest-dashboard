@@ -33,6 +33,16 @@
   container-type: inline-size;
 }
 
+.sales-tile-compact {
+  min-height: 0;
+  container-type: size;
+}
+
+.sales-tile-compact .text-figure {
+  font-size: clamp(1.7rem, 8cqi, 2.65rem);
+  line-height: 1;
+}
+
 @media (min-width: 1280px) and (min-height: 800px) {
   .sales-screen {
     height: 100dvh;
@@ -47,6 +57,18 @@
 
   .sales-tile .text-figure {
     font-size: clamp(3.25rem, min(14cqi, 32cqb), 6rem);
+  }
+
+  .sales-tile-hero .text-figure {
+    font-size: clamp(4.75rem, min(22cqi, 48cqb), 9.5rem);
+  }
+
+  .sales-tile-hero .font-label {
+    font-size: clamp(1.7rem, 6cqi, 2.75rem);
+  }
+
+  .sales-tile-compact .text-figure {
+    font-size: clamp(1.7rem, 8cqi, 2.65rem);
   }
 }
 

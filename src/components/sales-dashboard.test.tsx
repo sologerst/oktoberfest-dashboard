@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { dayBarPercent, dayColumnClass, posColumnClass, SalesDashboard } from "@/components/sales-dashboard";
+import { boothColumnClass, dayBarPercent, dayColumnClass, groupOnSite, posColumnClass, SalesDashboard } from "@/components/sales-dashboard";
 import type { DisplayCard, MoneyCard, PublicSnapshot, TicketBoard } from "@/lib/types";
 
 function money(
@@ -10,8 +10,9 @@ function money(
   quantity: number | null,
   status: MoneyCard["status"] = "ok",
   quantityLabel: string | null = null,
+  place?: DisplayCard["place"],
 ): DisplayCard {
-  return { id, label, cents, quantity, quantityLabel, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
+  return { id, label, cents, quantity, quantityLabel, place, asOf: "2026-10-02T19:14:00.000Z", status, error: null };
 }
 
 function tickets(overrides: Partial<TicketBoard> = {}): TicketBoard {
@@ -51,11 +52,23 @@ function html(value: PublicSnapshot, sample = false): string {
 }
 
 describe("sales screen", () => {
-  it("puts four festival days on one row and eight booths on two rows", () => {
+  it("puts the beer total beside its booths and merch and food in a short row", () => {
     expect(dayColumnClass(4)).toContain("xl:grid-cols-4");
     expect(dayColumnClass(3)).toContain("xl:grid-cols-3");
     expect(posColumnClass(8)).toContain("lg:grid-cols-4");
-    expect(posColumnClass(3)).toContain("xl:grid-cols-3");
+    expect(boothColumnClass(4)).toContain("sm:grid-cols-2");
+    const cards = [
+      money("beer", "Beer", 716400, 516, "ok", "beers", "total"),
+      money("proverbs", "Proverbs", 156000, 114, "ok", "beers", "booth"),
+      money("st-pius", "St. Pius", 229000, 164, "ok", "beers", "booth"),
+      money("bikers", "Bikers", 182200, 131, "ok", "beers", "booth"),
+      money("emerald", "Emerald", 149200, 107, "ok", "beers", "booth"),
+      money("merch", "Merch", 45500, 18, "ok", null, "other"),
+      money("food", "Food", 51700, 22, "ok", null, "other"),
+    ];
+    expect(groupOnSite(cards)?.total.label).toBe("Beer");
+    expect(groupOnSite(cards)?.booths.map((card) => card.label)).toEqual(["Proverbs", "St. Pius", "Bikers", "Emerald"]);
+    expect(groupOnSite(cards)?.other.map((card) => card.label)).toEqual(["Merch", "Food"]);
     const markup = html(
       snapshot({
         tickets: tickets({
@@ -66,22 +79,17 @@ describe("sales screen", () => {
             { date: "2026-10-04", label: "Sunday, Oct 4", count: 389 },
           ],
         }),
-        cards: [
-          money("beer", "Beer", 0, 0),
-          money("proverbs", "Proverbs", 0, 0, "ok", "beers"),
-          money("st-pius", "St. Pius", 0, 0, "ok", "beers"),
-          money("bikers", "Bikers", 0, 0, "ok", "beers"),
-          money("songwriters", "Songwriters", 0, 0, "ok", "beers"),
-          money("emerald", "Emerald", 0, 0, "ok", "beers"),
-          money("merch", "Merch", 0, 0),
-          money("food", "Food", 0, 0),
-        ],
+        cards,
       }),
     );
     expect(markup).toContain("xl:grid-cols-4");
-    expect(markup).toContain("lg:grid-cols-4");
+    expect(markup).toContain("sales-tile-hero");
+    expect(markup).toContain("sales-tile-compact");
+    expect(markup).toContain("xl:grid-cols-[minmax(16rem,0.95fr)_minmax(0,1.25fr)]");
+    expect(markup).not.toContain("lg:grid-cols-4");
     expect(markup).toContain("Proverbs");
     expect(markup).toContain("Sunday, Oct 4");
+    expect(groupOnSite([money("beer", "Beer", 1, 1), money("merch", "Merch", 1, 1)])).toBeNull();
   });
 
   it("sizes day bars against the busiest remaining day", () => {

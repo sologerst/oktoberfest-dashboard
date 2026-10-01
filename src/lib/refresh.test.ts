@@ -139,7 +139,9 @@ describe("snapshot refresh", () => {
     });
     expect(shown(snapshot, "beer")).toMatchObject({ status: "ok", cents: 2500 });
     expect(shown(snapshot, "food")?.status).toBe("unconfigured");
-    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 2500, quantity: 1, quantityLabel: "beers" });
+    expect(shown(snapshot, "alcohol")).toMatchObject({ status: "ok", cents: 2500, quantity: 1, quantityLabel: "beers", place: "total" });
+    expect(shown(snapshot, "beer")?.place).toBe("booth");
+    expect(shown(snapshot, "merch")?.place).toBe("other");
   });
 
   it("does not present yesterday's totals as today", async () => {
