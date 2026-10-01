@@ -150,12 +150,31 @@ describe("database targets", () => {
       password: "s3cret",
       database: "postgres",
     });
-    expect(() => festivalConnectionParts(poolerWithoutPassword)).toThrow(/missing a password/);
+    expect(() => festivalConnectionParts(poolerWithoutPassword)).toThrow(/FESTIVAL_DATABASE_URL is missing a password/);
     expect(festivalConnectionParts(`postgresql://postgres.${ref}:#s3cret@${pooler}:5432/postgres`)).toMatchObject({
       host: pooler,
       user: `postgres.${ref}`,
       password: "#s3cret",
     });
+    for (const password of ["/s3cret", "?s3cret", "abc%def", "a/b?c#d"]) {
+      expect(festivalConnectionParts(`postgresql://postgres.${ref}:${password}@${pooler}:5432/postgres`)).toMatchObject({
+        host: pooler,
+        user: `postgres.${ref}`,
+        password,
+        database: "postgres",
+      });
+    }
+    const previousPassword = process.env.FESTIVAL_DATABASE_PASSWORD;
+    process.env.FESTIVAL_DATABASE_PASSWORD = "from-env";
+    try {
+      expect(festivalConnectionParts(poolerWithoutPassword)).toMatchObject({
+        host: pooler,
+        password: "from-env",
+      });
+    } finally {
+      if (previousPassword === undefined) delete process.env.FESTIVAL_DATABASE_PASSWORD;
+      else process.env.FESTIVAL_DATABASE_PASSWORD = previousPassword;
+    }
     expect(festivalHostsToTry("aws-1-us-east-1.pooler.supabase.com")).toEqual([
       "aws-1-us-east-1.pooler.supabase.com",
       "aws-0-us-east-1.pooler.supabase.com",

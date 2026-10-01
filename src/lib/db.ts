@@ -91,22 +91,27 @@ export type DatabaseTarget = {
   database?: string;
 };
 
+function decodePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function looseConnection(connectionString: string): DatabaseTarget {
   const match = connectionString.match(
     /^[a-z][a-z0-9+.-]*:\/\/([^:/?#]+):([\s\S]+)@([^:/?#]+)(?::(\d+))?(\/[^?#]*)?/i,
   );
   if (!match) return { host: "", port: 5432 };
   return {
-    user: decodeURIComponent(match[1]),
-    password: decodeURIComponent(match[2]),
+    user: decodePart(match[1] ?? ""),
+    password: decodePart(match[2] ?? ""),
     host: match[3] ?? "",
     port: match[4] ? Number(match[4]) : 5432,
     database: match[5]?.replace(/^\//, "") || undefined,
   };
 }
-
-const MISSING_PASSWORD =
-  "Database URL is missing a password. Use postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres";
 
 /** A password glued on after postgres.<ref> never reaches the colon slot. */
 function recoverGluedPassword(user?: string, password?: string): { user?: string; password?: string } {
@@ -117,25 +122,32 @@ function recoverGluedPassword(user?: string, password?: string): { user?: string
 }
 
 function parseConnectionUri(raw: string): DatabaseTarget {
-  let parsed: DatabaseTarget;
+  // A password that starts with #, ?, or / makes the URL parser treat the
+  // username as the host and drop the password. The loose split keeps both.
+  const loose = looseConnection(raw);
+  if (loose.password && loose.host) return loose;
   try {
     const config = parse(raw);
-    parsed = {
+    const parsed: DatabaseTarget = {
       host: config.host ?? "",
       port: config.port ? Number(config.port) : 5432,
       user: config.user ?? undefined,
       password: config.password || undefined,
       database: config.database ?? undefined,
     };
+    if (parsed.host && parsed.host !== "base") return parsed;
   } catch {
-    parsed = { host: "", port: 5432 };
+    // The loose split already failed, so the string has no user:password@host.
   }
-  if ((!parsed.password || !parsed.host || parsed.host === "base") && raw.includes("#")) {
-    const loose = looseConnection(raw);
-    if (loose.password && loose.host) return loose;
-  }
-  if (!parsed.host || parsed.host === "base") return looseConnection(raw);
-  return parsed;
+  return loose.host ? loose : { host: "", port: 5432 };
+}
+
+function fillPassword(parts: DatabaseTarget, override: string | undefined, variable: string): DatabaseTarget {
+  const password = override?.trim() || parts.password;
+  if (password) return { ...parts, password };
+  throw new Error(
+    `${variable} is missing a password. Use postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres and redeploy.`,
+  );
 }
 
 /** Separate pasted Postgres URLs. A scheme inside the password, before @, stays put. */
@@ -161,11 +173,6 @@ function connectionTarget(connectionString: string): DatabaseTarget {
   return preferred ?? withPassword[0] ?? usable[0] ?? parsed[0] ?? { host: "", port: 5432 };
 }
 
-function requirePassword(parts: DatabaseTarget): DatabaseTarget {
-  if (parts.password) return parts;
-  throw new Error(MISSING_PASSWORD);
-}
-
 /**
  * The direct Supabase host is IPv6-only. Vercel is IPv4-only, so that host
  * never answers and the card save times out. Parts are returned separately so a
@@ -176,19 +183,27 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
   const ref = supabaseProjectRef(parsed.host);
   if (!ref) {
     if (!parsed.host.includes("pooler.supabase.com")) return parsed;
-    return requirePassword({
-      ...parsed,
-      ...recoverGluedPassword(parsed.user, parsed.password),
-      database: cleanSupabaseDatabase(parsed.database),
-    });
+    return fillPassword(
+      {
+        ...parsed,
+        ...recoverGluedPassword(parsed.user, parsed.password),
+        database: cleanSupabaseDatabase(parsed.database),
+      },
+      process.env.DASHBOARD_DATABASE_PASSWORD,
+      "DASHBOARD_DATABASE_URL",
+    );
   }
-  return requirePassword({
-    ...parsed,
-    ...poolerLogin(parsed.user, parsed.password, ref),
-    host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
-    port: parsed.port === 6543 ? 6543 : 5432,
-    database: cleanSupabaseDatabase(parsed.database),
-  });
+  return fillPassword(
+    {
+      ...parsed,
+      ...poolerLogin(parsed.user, parsed.password, ref),
+      host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
+      port: parsed.port === 6543 ? 6543 : 5432,
+      database: cleanSupabaseDatabase(parsed.database),
+    },
+    process.env.DASHBOARD_DATABASE_PASSWORD,
+    "DASHBOARD_DATABASE_URL",
+  );
 }
 
 /**
@@ -203,21 +218,29 @@ export function festivalConnectionParts(connectionString: string): DatabaseTarge
   const parsed = connectionTarget(connectionString);
   const ref = supabaseProjectRef(parsed.host);
   if (ref) {
-    return requirePassword({
-      ...parsed,
-      ...poolerLogin(parsed.user, parsed.password, ref),
-      host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
-      port: 5432,
-      database: cleanSupabaseDatabase(parsed.database),
-    });
+    return fillPassword(
+      {
+        ...parsed,
+        ...poolerLogin(parsed.user, parsed.password, ref),
+        host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
+        port: 5432,
+        database: cleanSupabaseDatabase(parsed.database),
+      },
+      process.env.FESTIVAL_DATABASE_PASSWORD,
+      "FESTIVAL_DATABASE_URL",
+    );
   }
   if (parsed.host.includes("pooler.supabase.com")) {
-    return requirePassword({
-      ...parsed,
-      ...recoverGluedPassword(parsed.user, parsed.password),
-      port: parsed.port === 6543 ? 5432 : parsed.port,
-      database: cleanSupabaseDatabase(parsed.database),
-    });
+    return fillPassword(
+      {
+        ...parsed,
+        ...recoverGluedPassword(parsed.user, parsed.password),
+        port: parsed.port === 6543 ? 5432 : parsed.port,
+        database: cleanSupabaseDatabase(parsed.database),
+      },
+      process.env.FESTIVAL_DATABASE_PASSWORD,
+      "FESTIVAL_DATABASE_URL",
+    );
   }
   return parsed;
 }
