@@ -136,6 +136,26 @@ describe("database targets", () => {
       password: "s3cret",
       database: "postgres",
     });
+    const poolerWithoutPassword = `postgresql://postgres.${ref}@${pooler}:5432/postgres`;
+    const directWithPassword = `postgresql://postgres:s3cret@db.${ref}.supabase.co:5432/postgres`;
+    expect(festivalConnectionParts(`${poolerWithoutPassword}\n${directWithPassword}`)).toMatchObject({
+      host: pooler,
+      user: `postgres.${ref}`,
+      password: "s3cret",
+      database: "postgres",
+    });
+    expect(festivalConnectionParts(`postgresql://postgres.${ref}s3cret@${pooler}:5432/postgres`)).toMatchObject({
+      host: pooler,
+      user: `postgres.${ref}`,
+      password: "s3cret",
+      database: "postgres",
+    });
+    expect(() => festivalConnectionParts(poolerWithoutPassword)).toThrow(/missing a password/);
+    expect(festivalConnectionParts(`postgresql://postgres.${ref}:#s3cret@${pooler}:5432/postgres`)).toMatchObject({
+      host: pooler,
+      user: `postgres.${ref}`,
+      password: "#s3cret",
+    });
     expect(festivalHostsToTry("aws-1-us-east-1.pooler.supabase.com")).toEqual([
       "aws-1-us-east-1.pooler.supabase.com",
       "aws-0-us-east-1.pooler.supabase.com",

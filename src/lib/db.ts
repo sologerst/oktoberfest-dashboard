@@ -58,6 +58,9 @@ function poolerLogin(
   password: string | undefined,
   ref: string,
 ): { user: string; password?: string } {
+  const recovered = recoverGluedPassword(user, password);
+  user = recovered.user;
+  password = recovered.password;
   const raw = user ?? "";
   if (!password) {
     const marker = `.${ref}`;
@@ -102,18 +105,18 @@ function looseConnection(connectionString: string): DatabaseTarget {
   };
 }
 
-/** A second pasted postgres URL is not part of the password or database name. */
-function firstConnectionUri(value: string): string {
-  const raw = value.trim().replace(/^\uFEFF/, "").replace(/^['"]|['"]$/g, "");
-  const again = raw.slice(1).search(/postgres(?:ql)?:\/\//i);
-  if (again === -1) return raw;
-  const before = raw.slice(0, again + 1);
-  if (!/@[^/\s]+/.test(before)) return raw;
-  return before.trim();
+const MISSING_PASSWORD =
+  "Database URL is missing a password. Use postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres";
+
+/** A password glued on after postgres.<ref> never reaches the colon slot. */
+function recoverGluedPassword(user?: string, password?: string): { user?: string; password?: string } {
+  if (password) return { user, password };
+  const match = (user ?? "").match(/^([A-Za-z_][A-Za-z0-9_]{0,62})\.([a-z0-9]{20})(.+)$/);
+  if (!match?.[3]) return { user, password };
+  return { user: `${match[1]}.${match[2]}`, password: match[3] };
 }
 
-function connectionTarget(connectionString: string): DatabaseTarget {
-  const raw = firstConnectionUri(connectionString);
+function parseConnectionUri(raw: string): DatabaseTarget {
   let parsed: DatabaseTarget;
   try {
     const config = parse(raw);
@@ -121,14 +124,46 @@ function connectionTarget(connectionString: string): DatabaseTarget {
       host: config.host ?? "",
       port: config.port ? Number(config.port) : 5432,
       user: config.user ?? undefined,
-      password: config.password ?? undefined,
+      password: config.password || undefined,
       database: config.database ?? undefined,
     };
   } catch {
     parsed = { host: "", port: 5432 };
   }
+  if ((!parsed.password || !parsed.host || parsed.host === "base") && raw.includes("#")) {
+    const loose = looseConnection(raw);
+    if (loose.password && loose.host) return loose;
+  }
   if (!parsed.host || parsed.host === "base") return looseConnection(raw);
   return parsed;
+}
+
+/** Separate pasted Postgres URLs. A scheme inside the password, before @, stays put. */
+function connectionUris(value: string): string[] {
+  const raw = value.trim().replace(/^\uFEFF/, "").replace(/^['"]|['"]$/g, "");
+  const indexes: number[] = [];
+  for (const match of raw.matchAll(/postgres(?:ql)?:\/\//gi)) {
+    if (match.index === undefined) continue;
+    if (indexes.length > 0 && !/@[^/\s]+/.test(raw.slice(0, match.index))) continue;
+    indexes.push(match.index);
+  }
+  if (indexes.length === 0) return [raw];
+  return indexes.map((start, index) => raw.slice(start, indexes[index + 1] ?? raw.length).trim()).filter(Boolean);
+}
+
+function connectionTarget(connectionString: string): DatabaseTarget {
+  const parsed = connectionUris(connectionString).map(parseConnectionUri);
+  const usable = parsed.filter((item) => item.host);
+  const withPassword = usable.filter((item) => item.password);
+  const preferred = withPassword.find(
+    (item) => item.host.includes("pooler.supabase.com") || supabaseProjectRef(item.host),
+  );
+  return preferred ?? withPassword[0] ?? usable[0] ?? parsed[0] ?? { host: "", port: 5432 };
+}
+
+function requirePassword(parts: DatabaseTarget): DatabaseTarget {
+  if (parts.password) return parts;
+  throw new Error(MISSING_PASSWORD);
 }
 
 /**
@@ -141,15 +176,19 @@ export function dashboardConnectionParts(connectionString: string): DatabaseTarg
   const ref = supabaseProjectRef(parsed.host);
   if (!ref) {
     if (!parsed.host.includes("pooler.supabase.com")) return parsed;
-    return { ...parsed, database: cleanSupabaseDatabase(parsed.database) };
+    return requirePassword({
+      ...parsed,
+      ...recoverGluedPassword(parsed.user, parsed.password),
+      database: cleanSupabaseDatabase(parsed.database),
+    });
   }
-  return {
+  return requirePassword({
     ...parsed,
     ...poolerLogin(parsed.user, parsed.password, ref),
     host: process.env.DASHBOARD_SUPABASE_POOLER_HOST || "aws-0-us-east-1.pooler.supabase.com",
     port: parsed.port === 6543 ? 6543 : 5432,
     database: cleanSupabaseDatabase(parsed.database),
-  };
+  });
 }
 
 /**
@@ -164,20 +203,21 @@ export function festivalConnectionParts(connectionString: string): DatabaseTarge
   const parsed = connectionTarget(connectionString);
   const ref = supabaseProjectRef(parsed.host);
   if (ref) {
-    return {
+    return requirePassword({
       ...parsed,
       ...poolerLogin(parsed.user, parsed.password, ref),
       host: process.env.FESTIVAL_SUPABASE_POOLER_HOST || "aws-1-us-east-1.pooler.supabase.com",
       port: 5432,
       database: cleanSupabaseDatabase(parsed.database),
-    };
+    });
   }
   if (parsed.host.includes("pooler.supabase.com")) {
-    return {
+    return requirePassword({
       ...parsed,
+      ...recoverGluedPassword(parsed.user, parsed.password),
       port: parsed.port === 6543 ? 5432 : parsed.port,
       database: cleanSupabaseDatabase(parsed.database),
-    };
+    });
   }
   return parsed;
 }
