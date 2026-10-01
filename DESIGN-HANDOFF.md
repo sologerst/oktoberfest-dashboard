@@ -10,7 +10,7 @@ Source of the look: `src/screens/Admin.tsx`, `src/screens/admin/DashboardTab.tsx
 
 One page. A TV or a laptop in the office. No admin sidebar, no breadcrumb, no 24 tabs. The admin shell is the reference for color, type, and cards. It is not the layout to copy.
 
-Designed first for a 1920×1080 TV read from across the room. At that size, with three on-site cards and up to three remaining days, the page fills the screen and does not scroll. Shorter screens scroll instead of clipping. Below `xl`, the same blocks stack. Primary numbers scale with the card (`18cqi`) and stay at least `3.25rem`. Do not shrink them under that to force a fit.
+Designed first for a 1920×1080 TV read from across the room. The live board is three ticket totals, four remaining days, weekend passes, day not recorded, and the on-site cards (Beer, the booths, Merch, and Food). From 1280×800 up, that set fills the screen and does not scroll. Cards shrink into their row instead of painting over the next card. Numbers stay at least `3.25rem`. Shorter screens scroll. Below `lg`, the same blocks stack.
 
 ## Type
 
@@ -89,7 +89,7 @@ One full-width card, `px-7 py-5` (`lg:px-9 lg:py-6`), same border and background
 
 Title: `SOLD FOR REMAINING DAYS`, Bebas, `text-white/70`, `text-xl` (`lg:text-2xl`), tracking widest, margin-bottom 16px.
 
-One column per remaining ticketed day (Friday Oct 2, Saturday Oct 3, Sunday Oct 4, 2026, skipping days already past). One day is a single column. Two days are two columns from `sm`. Three days are two columns from `sm` and three from `xl`.
+One column per remaining ticketed day (Thursday Oct 1 through Sunday Oct 4, 2026, skipping days already past). One day is a single column. Two days are two columns from `sm`. Three days are two columns from `sm` and three from `xl`. Four days are two columns from `sm` and four from `xl`, so Sunday stays on the same row.
 
 - Day name in Bebas, `text-white/70`, `clamp(1.35rem, 4.8cqi, 1.85rem)`. Example: `FRIDAY, OCT 2`.
 - Count under it, Fraunces bold white, `clamp(2.5rem, 11cqi, 4.25rem)`, tabular nums.
@@ -106,7 +106,7 @@ Empty days list (festival over, or no dated tickets yet): DM Sans `text-white/50
 
 A Bebas line, same style as the tickets kicker: `ON-SITE SALES`.
 
-Cards use the same grid and chrome as the ticket stats: `gap-4`, one column, two from `sm`, three from `xl`. Extra booth cards wrap into another row of the same size.
+Three on-site cards use one column, two from `sm`, and three from `xl`. Four or more cards use four columns from `lg`, so eight cards are two rows of four. Each card stays inside its grid cell.
 
 Each card:
 
