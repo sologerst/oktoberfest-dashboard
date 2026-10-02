@@ -274,12 +274,15 @@ describe("Square card totals", () => {
     expect(pulled.cards.pius).toMatchObject({ status: "ok", cents: 400, quantity: 1 });
   });
 
-  it("counts every category variation when the pasted count id is the item, not the variation on the order", async () => {
+  it("counts the listed item's variations and leaves other category items out of the count", async () => {
     const fetchImpl: typeof fetch = async (url) => {
       if (String(url).includes("catalog")) {
         return new Response(
           JSON.stringify({
-            items: [{ id: "item-1", item_data: { variations: [{ id: "var-a" }, { id: "var-b" }] } }],
+            items: [
+              { id: "item-1", item_data: { variations: [{ id: "var-a" }, { id: "var-b" }] } },
+              { id: "cider", item_data: { variations: [{ id: "var-c" }] } },
+            ],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -295,7 +298,7 @@ describe("Square card totals", () => {
               updated_at: "2026-10-03T18:00:00.000Z",
               line_items: [
                 { catalog_object_id: "var-b", quantity: "3", total_money: { amount: 4200 } },
-                { catalog_object_id: "not-beer", quantity: "1", total_money: { amount: 500 } },
+                { catalog_object_id: "var-c", quantity: "2", total_money: { amount: 800 } },
               ],
             },
           ],
@@ -322,20 +325,27 @@ describe("Square card totals", () => {
       environment: "production",
       fetchImpl,
     });
-    expect(pulled.cards.bikers).toMatchObject({ status: "ok", cents: 4200, quantity: 3 });
-    expect(countIdsForCard(pos.cards[0]!, ["item-1", "var-a", "var-b"]).has("var-b")).toBe(true);
+    expect(pulled.cards.bikers).toMatchObject({ status: "ok", cents: 5000, quantity: 3 });
+    const variations = new Map<string, readonly string[]>([
+      ["item-1", ["var-a", "var-b"]],
+      ["cider", ["var-c"]],
+    ]);
+    expect([...countIdsForCard(pos.cards[0]!, variations)].sort()).toEqual(["item-1", "var-a", "var-b"]);
+    const variationCard = { ...pos.cards[0]!, countItemIds: ["var-b"] };
+    expect([...countIdsForCard(variationCard, variations)]).toEqual(["var-b"]);
   });
 
   it("keeps a listed-item card counting only those ids", () => {
+    const variations = new Map<string, readonly string[]>([["mug", ["var-1", "var-2"]]]);
     const categoryAndItems = {
       ...blank("booth", "Booth"),
       catalogObjectIds: ["mug"],
       categoryIds: ["CAT"],
       countItemIds: ["mug"],
     };
-    expect([...countIdsForCard(categoryAndItems, ["mug", "var-1", "var-2"])]).toEqual(["mug"]);
+    expect([...countIdsForCard(categoryAndItems, variations)].sort()).toEqual(["mug", "var-1", "var-2"]);
     const itemsOnly = { ...blank("merch", "Merch"), catalogObjectIds: ["mug", "shirt"], countItemIds: ["mug"] };
-    expect([...countIdsForCard(itemsOnly, [])]).toEqual(["mug"]);
+    expect([...countIdsForCard(itemsOnly, new Map())]).toEqual(["mug"]);
   });
 
   it("does not call Square when no card is configured", async () => {

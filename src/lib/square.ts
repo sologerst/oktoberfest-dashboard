@@ -34,9 +34,17 @@ type SquareOrder = {
   updated_at?: string;
   line_items?: SquareLine[];
 };
+type CatalogVariation = {
+  id?: string;
+  item_variation_data?: { item_id?: string };
+};
 type CatalogObject = {
   id?: string;
-  item_data?: { variations?: { id?: string }[] };
+  item_data?: { variations?: CatalogVariation[] };
+};
+type CategoryCatalog = {
+  objectIds: string[];
+  variationsByItem: Map<string, string[]>;
 };
 
 export function squareOrigin(environment: string): string {
@@ -289,22 +297,41 @@ function clientFor(fetchImpl: typeof fetch, origin: string, token: string): Squa
   };
 }
 
-async function expandCategory(client: SquareClient, categoryIds: string[]): Promise<string[]> {
-  if (categoryIds.length === 0) return [];
-  const ids = new Set<string>();
+function emptyCategoryCatalog(): CategoryCatalog {
+  return { objectIds: [], variationsByItem: new Map() };
+}
+
+function addVariation(variationsByItem: Map<string, Set<string>>, itemId: string, variationId: string) {
+  const variations = variationsByItem.get(itemId) ?? new Set<string>();
+  variations.add(variationId);
+  variationsByItem.set(itemId, variations);
+}
+
+async function expandCategory(client: SquareClient, categoryIds: string[]): Promise<CategoryCatalog> {
+  if (categoryIds.length === 0) return emptyCategoryCatalog();
+  const objectIds = new Set<string>();
+  const variationsByItem = new Map<string, Set<string>>();
   let cursor: string | undefined;
   for (let page = 0; page < PAGE_LIMIT; page += 1) {
     const body: Record<string, unknown> = { category_ids: categoryIds, limit: 100 };
     if (cursor) body.cursor = cursor;
     const payload = await client.searchCatalogItems(body);
     for (const item of payload.items ?? []) {
-      if (item.id) ids.add(item.id);
+      if (item.id) objectIds.add(item.id);
       for (const variation of item.item_data?.variations ?? []) {
-        if (variation.id) ids.add(variation.id);
+        if (!variation.id) continue;
+        objectIds.add(variation.id);
+        const parentId = variation.item_variation_data?.item_id || item.id;
+        if (parentId) addVariation(variationsByItem, parentId, variation.id);
       }
     }
-    for (const variationId of payload.matched_variation_ids ?? []) ids.add(variationId);
-    if (!payload.cursor) return [...ids];
+    for (const variationId of payload.matched_variation_ids ?? []) objectIds.add(variationId);
+    if (!payload.cursor) {
+      return {
+        objectIds: [...objectIds],
+        variationsByItem: new Map([...variationsByItem].map(([id, variations]) => [id, [...variations]])),
+      };
+    }
     cursor = payload.cursor;
   }
   throw new Error("Square catalog search exceeded the page limit");
@@ -384,14 +411,17 @@ function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType
 }
 
 /**
- * Order lines carry variation ids. A category card that asks for a count is
- * counting that category, so every variation already included in the dollars
- * counts, not only the single id pasted into card setup.
+ * Order lines carry variation ids. A listed item id counts that item's
+ * variations. Other items in the category stay in the dollars only.
  */
-export function countIdsForCard(card: PosConfig["cards"][number], categoryObjectIds: readonly string[]): Set<string> {
-  const ids = new Set(card.countItemIds);
-  if (card.countItemIds.length > 0 && card.categoryIds.length > 0 && card.catalogObjectIds.length === 0) {
-    for (const id of categoryObjectIds) ids.add(id);
+export function countIdsForCard(
+  card: PosConfig["cards"][number],
+  variationsByItem: ReadonlyMap<string, readonly string[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const id of card.countItemIds) {
+    ids.add(id);
+    for (const variationId of variationsByItem.get(id) ?? []) ids.add(variationId);
   }
   return ids;
 }
@@ -419,14 +449,17 @@ export async function pullPos(input: {
   const bounds = chicagoDayBounds(day);
   const fingerprint = posFingerprint(input.config);
   const categoryObjects = {} as Record<CardId, string[]>;
+  const variationsByCard = new Map<CardId, ReadonlyMap<string, readonly string[]>>();
   for (const card of input.config.cards) {
-    categoryObjects[card.id] =
-      readiness[card.id] === "ready" ? await expandCategory(client, card.categoryIds) : [];
+    const catalog =
+      readiness[card.id] === "ready" ? await expandCategory(client, card.categoryIds) : emptyCategoryCatalog();
+    categoryObjects[card.id] = catalog.objectIds;
+    variationsByCard.set(card.id, catalog.variationsByItem);
   }
 
   const { cardFor, failed } = locationMembership(input.config, categoryObjects);
   const countIdsByCard = new Map(
-    input.config.cards.map((card) => [card.id, countIdsForCard(card, categoryObjects[card.id] ?? [])]),
+    input.config.cards.map((card) => [card.id, countIdsForCard(card, variationsByCard.get(card.id) ?? new Map())]),
   );
   const counting = new Set(input.config.cards.filter((card) => card.countItemIds.length > 0).map((card) => card.id));
   const sameConfig = input.state?.configFingerprint === fingerprint;

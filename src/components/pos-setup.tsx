@@ -210,7 +210,7 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
       </header>
       <main className="mx-auto max-w-3xl space-y-6 p-6">
         <p className="text-sm text-white/70">
-          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. The same item or category can be on every booth. Each card counts sales of those items only at its own locations. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths. To show a count as well as the dollars, paste one id in Count these items. A category card counts every item in that category.
+          Each card is one Square location plus the items sold there, or a total of other cards. For the alcohol booths, add one card per location and paste that booth&apos;s location id and item or category ids. The same item or category can be on every booth. Each card counts sales of those items only at its own locations. Then add an Alcohol card, choose &quot;Add other cards together,&quot; and check those booths. To show a count as well as the dollars, paste the item or variation id in Count these items. That count includes only those ids. Dollars still include the whole category.
         </p>
         {drafts.map((draft, index) => (
           <section key={draft.id} className="space-y-4 rounded-sm border border-white/10 bg-card p-5">
@@ -283,7 +283,7 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   value={draft.countItems}
                   onChange={(countItems) => update(index, { countItems })}
                   placeholder="An item or variation id"
-                  hint="Optional. On a category card, any id here counts every item in the category. On an item card, only these ids are counted. Leave this blank to show dollars only."
+                  hint="Optional. Counts these ids only. An item id also counts that item's variations, because each Square order line stores the variation. Leave this blank to show dollars only."
                 />
                 <CountLabel value={draft.countLabel} onChange={(countLabel) => update(index, { countLabel })} />
               </div>

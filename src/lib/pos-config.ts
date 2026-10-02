@@ -11,7 +11,7 @@ export type PosCardConfig = {
   categoryIds: string[];
   /**
    * Ids that turn on the count under the dollars. Empty means dollars only.
-   * On a category card with no separate item list, the count includes every variation in the category.
+   * An item id also counts that item's variations. Other category items stay in the dollars.
    */
   countItemIds: string[];
   /** Word after that count, such as "beers". Empty uses item/items. */
@@ -267,11 +267,11 @@ function hasRollupCycle(cards: PosCardConfig[]): boolean {
   return cards.some((card) => walk(card.id));
 }
 
-/** Busts the Square order cache when locations or items change. */
+/** Busts the Square order cache when locations, items, or count rules change. */
 export function posFingerprint(config: PosConfig): string {
   return JSON.stringify({
     attribution: "location",
-    countMatch: "category",
+    countMatch: "listed-item",
     cards: config.cards.map((card) => ({
       id: card.id,
       locationIds: [...card.locationIds].sort(),
