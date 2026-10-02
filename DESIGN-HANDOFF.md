@@ -14,16 +14,12 @@ Designed first for a 1920×1080 TV read from across the room. The live board is 
 
 ## Type
 
-Load the same faces the festival site loads:
-
-`Fraunces` (opsz 9..144, weights 300 and 700), `DM Sans` (300, 400, 500, 600), `Bebas Neue`.
-
-https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;0,9..144,900;1,9..144,300;1,9..144,700&family=DM+Sans:wght@300;400;500;600&family=Bebas+Neue&display=swap
+One sans-serif, `DM Sans` (400, 500, 600, 700), so the numbers and labels stay easy to read from across the room.
 
 | Role | Face | Use |
 |---|---|---|
-| Display | Fraunces, bold, optical sizing on | Page title and every big number |
-| Label | Bebas Neue, `letter-spacing: 0.08em`, uppercase | Kickers, card labels, section titles |
+| Display | DM Sans, bold, tabular nums | Page title and every big number |
+| Label | DM Sans semibold, `letter-spacing: 0.04em`, uppercase | Kickers, card labels, section titles |
 | Body | DM Sans | Subtitles, row labels, empty states |
 
 ## Color
@@ -38,7 +34,7 @@ All colors are the admin's. Amber is `oklch(0.72 0.16 65)`.
 | Mark | `oklch(0.72 0.16 65)` | Logo square, money figures, bar fills |
 | Mark ink | `oklch(0.14 0.04 60)` | Icon inside the logo square |
 | Hairline | `border-white/10` | Header bottom, every card |
-| Label text | `text-white/80` on cards, `text-white/70` on day names | Bebas labels, large enough to read across a room |
+| Label text | `text-white/80` on cards, `text-white/70` on day names | DM Sans labels, large enough to read across a room |
 | Body text | `text-white/70` | Day names and the weekend lines |
 | Quiet text | `text-white/65` | Subtitles under numbers |
 | Empty text | `text-white/55` | "No sales yet." and "Unavailable" |
@@ -53,9 +49,9 @@ Height comes from `px-6 py-3` (`lg:px-8 lg:py-4`), bottom border `border-white/1
 Left, in a row with `gap-4`:
 
 - A `48×48` square, `rounded-sm`, amber fill. Centered mark is the same stacked-layers icon the admin uses, filled with the header color, 26×26.
-- Two lines. Top: `NASHVILLE OKTOBERFEST 2026` in amber Bebas, 16px (`lg` 18px), tracking widest, tight line-height. Bottom: `Sales` in white Fraunces bold, 30px.
+- Two lines. Top: `NASHVILLE OKTOBERFEST 2026` in amber DM Sans, 16px (`lg` 18px), tracking widest, tight line-height. Bottom: `Sales` in white DM Sans bold, 30px.
 
-Right, DM Sans 18px (`lg` 20px), `text-white/75`: `As of 2:14 PM CT`. When the snapshot is stale, add an amber Bebas label `STALE` (16px) in front of that time. Keep the last numbers on screen.
+Right, DM Sans 18px (`lg` 20px), `text-white/75`: `As of 2:14 PM CT`. When the snapshot is stale, add an amber DM Sans label `STALE` (16px) in front of that time. Keep the last numbers on screen.
 
 ## Page stack
 
@@ -63,7 +59,7 @@ Content is `p-5` (`lg:p-6`) with `gap-4` (`lg:gap-5`) between blocks. On a 1080p
 
 ### Tickets
 
-A Bebas line, `text-white/60`, `text-lg` (`lg:text-xl`), tracking widest:
+A DM Sans line, `text-white/60`, `text-lg` (`lg:text-xl`), tracking widest:
 
 `TICKETS · REFRESHES EVERY 60S`
 
@@ -71,8 +67,8 @@ Then a row of three stat cards. Grid is 1 column, 2 columns from `sm`, and 3 col
 
 Each card: `rounded-sm`, `border border-white/10`, `px-7 py-6` (`lg:px-8 lg:py-7`), card background, content vertically centered, at least 14rem tall. The card is an inline-size container. Inside, top to bottom:
 
-1. Bebas label, `text-white/80`, `clamp(1.7rem, 5.4cqi, 2.15rem)`, tracking widest.
-2. Fraunces bold white (or amber for money), `clamp(3.25rem, 18cqi, 8rem)`, tight line-height, nowrap, tabular nums.
+1. DM Sans label, `text-white/80`, `clamp(1.7rem, 5.4cqi, 2.15rem)`, tracking widest.
+2. DM Sans bold white (or amber for money), `clamp(3.25rem, 18cqi, 8rem)`, tight line-height, nowrap, tabular nums.
 3. DM Sans subtitle, `text-white/65` (or `text-white/55` when unavailable), `clamp(1.25rem, 3cqi, 1.55rem)`, margin-top 16px, at least two lines tall so figures in a row share a baseline. Keep that line when a POS card has no subtitle. Do not invent a quantity.
 
 | Card | Label | Value | Subtitle |
@@ -87,31 +83,31 @@ Each card: `rounded-sm`, `border border-white/10`, `px-7 py-6` (`lg:px-8 lg:py-7
 
 One full-width card, `px-7 py-5` (`lg:px-9 lg:py-6`), same border and background as the stat cards.
 
-Title: `SOLD FOR REMAINING DAYS`, Bebas, `text-white/70`, `text-xl` (`lg:text-2xl`), tracking widest, margin-bottom 16px.
+Title: `SOLD FOR REMAINING DAYS`, DM Sans, `text-white/70`, `text-xl` (`lg:text-2xl`), tracking widest, margin-bottom 16px.
 
 One column per remaining ticketed day (Thursday Oct 1 through Sunday Oct 4, 2026, skipping days already past). One day is a single column. Two days are two columns from `sm`. Three days are two columns from `sm` and three from `xl`. Four days are two columns from `sm` and four from `xl`, so Sunday stays on the same row.
 
-- Day name in Bebas, `text-white/70`, `clamp(1.35rem, 4.8cqi, 1.85rem)`. Example: `FRIDAY, OCT 2`.
-- Count under it, Fraunces bold white, `clamp(2.5rem, 11cqi, 4.25rem)`, tabular nums.
+- Day name in DM Sans, `text-white/70`, `clamp(1.35rem, 4.8cqi, 1.85rem)`. Example: `FRIDAY, OCT 2`.
+- Count under it, DM Sans bold white, `clamp(2.5rem, 11cqi, 4.25rem)`, tabular nums.
 - Under the count: a track `h-3`, `bg-white/10`, `rounded-full`. Fill is amber, width is that day's count divided by the largest remaining day. A day with zero is an empty track, not a hidden row.
 
 Under the day columns, a `border-t border-white/10` and the extra lines in a row. No bars. These are not days:
 
-- `Weekend passes` in Bebas `text-xl`, count in Fraunces bold `text-4xl`.
+- `Weekend passes` in DM Sans `text-xl`, count in DM Sans bold `text-4xl`.
 - `Day not recorded` the same way. Render this line only when the count is greater than zero.
 
 Empty days list (festival over, or no dated tickets yet): DM Sans `text-white/50` `text-2xl`, `No day sales yet.` The weekend and unrecorded lines still show when their counts are non-zero.
 
 ### Beer, merch, food
 
-A Bebas line, same style as the tickets kicker: `ON-SITE SALES`.
+A DM Sans line, same style as the tickets kicker: `ON-SITE SALES`.
 
 When the snapshot marks one card as the total and others as booths, the total sits on the left at a larger size and the booths fill a grid beside it. Merch and food, marked as other, sit in a short row under that pair. Snapshots without those marks keep the even grid: three cards use one column, two from `sm`, and three from `xl`. Four or more use four columns from `lg`. Each card stays inside its cell.
 
 Each card:
 
-1. Label `BEER`, `MERCH`, or `FOOD`. Bebas, `text-white/80`, `clamp(1.7rem, 5.4cqi, 2.15rem)`, tracking widest.
-2. Today's dollars, Fraunces bold, amber, `clamp(3.25rem, 18cqi, 8rem)`.
+1. Label `BEER`, `MERCH`, or `FOOD`. DM Sans, `text-white/80`, `clamp(1.7rem, 5.4cqi, 2.15rem)`, tracking widest.
+2. Today's dollars, DM Sans bold, amber, `clamp(3.25rem, 18cqi, 8rem)`.
 3. Subtitle in DM Sans, `text-white/65`, `clamp(1.25rem, 3cqi, 1.55rem)`, two lines tall: the programmed item count when card setup lists variation ids to count (`128 beers`, or `128 items` when no name is set). If that list is blank, or a counted line has no quantity, leave the subtitle line blank. Do not invent one.
 
 A card with no sales today still renders. Value is `$0.00`. Subtitle is `No sales yet.` in `text-white/55`.
