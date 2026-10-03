@@ -7,6 +7,7 @@ import {
   locationMembership,
   pullPos,
   totalsFromState,
+  variationIdsByItem,
   type CardAttempt,
   type CardForCatalog,
 } from "@/lib/square";
@@ -61,6 +62,29 @@ describe("Square card totals", () => {
     expect([...failed].sort()).toEqual(["beer", "merch"]);
     expect(cardFor("L1", "beer-only")).toBeNull();
     expect(cardFor("L1", "shared")).toBeNull();
+  });
+
+  it("attributes a variation to the card that lists the parent item", () => {
+    const { cardFor, failed } = locationMembership(
+      config({
+        beer: { locationIds: ["L-GATE"], catalogObjectIds: ["item-1"] },
+      }),
+      { beer: [], merch: [], food: [] },
+      new Map([["item-1", ["var-a", "var-b"]]]),
+    );
+    expect(failed.size).toBe(0);
+    expect(cardFor("L-GATE", "var-b")).toBe("beer");
+    expect(cardFor("L-GATE", "item-1")).toBe("beer");
+    expect(cardFor("L-GATE", "other")).toBeNull();
+  });
+
+  it("reads variation ids from catalog items and ignores a bare variation", () => {
+    const variations = variationIdsByItem([
+      { type: "ITEM", id: "item-1", item_data: { variations: [{ id: "var-a" }, { id: "var-b" }] } },
+      { type: "ITEM_VARIATION", id: "var-only" },
+    ]);
+    expect(variations.get("item-1")).toEqual(["var-a", "var-b"]);
+    expect(variations.has("var-only")).toBe(false);
   });
 
   it("counts a shared item only at the location on that card", () => {
@@ -167,8 +191,15 @@ describe("Square card totals", () => {
 
   it("searches closed orders for the day, then updates since the cursor", async () => {
     const bodies: Record<string, unknown>[] = [];
-    const fetchImpl: typeof fetch = async (_url, init) => {
-      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      if (String(url).includes("catalog")) {
+        return new Response(JSON.stringify({ objects: [{ type: "ITEM_VARIATION", id: "beer-1" }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      bodies.push(body);
       const incremental = bodies.length > 1;
       return new Response(
         JSON.stringify({
@@ -336,6 +367,74 @@ describe("Square card totals", () => {
     expect([...countIdsForCard(categoryAndItems, ["mug", "var-1", "var-2"])]).toEqual(["mug"]);
     const itemsOnly = { ...blank("merch", "Merch"), catalogObjectIds: ["mug", "shirt"], countItemIds: ["mug"] };
     expect([...countIdsForCard(itemsOnly, [])]).toEqual(["mug"]);
+    expect([...countIdsForCard(itemsOnly, [], new Map([["mug", ["var-mug"]]]))].sort()).toEqual(["mug", "var-mug"]);
+  });
+
+  it("sums gate sales when the card lists item ids and the order lines are variations", async () => {
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const body = JSON.parse(String(init?.body)) as { object_ids?: string[] };
+      if (String(url).includes("batch-retrieve")) {
+        if (body.object_ids?.length !== 1) {
+          return new Response(JSON.stringify({ errors: [{ detail: "Catalog object with ID `missing` not found." }] }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const id = body.object_ids[0];
+        if (id === "missing") {
+          return new Response(JSON.stringify({ errors: [{ detail: "Catalog object with ID `missing` not found." }] }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            objects: [{ type: "ITEM", id, item_data: { variations: [{ id: `${id}-var` }] } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          orders: [
+            {
+              id: "gate-order",
+              location_id: "L-GATE",
+              state: "COMPLETED",
+              closed_at: "2026-10-03T18:00:00.000Z",
+              updated_at: "2026-10-03T18:00:00.000Z",
+              line_items: [
+                { catalog_object_id: "fri-var", quantity: "2", total_money: { amount: 2000 } },
+                { catalog_object_id: "sat-var", quantity: "1", total_money: { amount: 1000 } },
+                { catalog_object_id: "sun-var", quantity: "1", total_money: { amount: 1500 } },
+                { catalog_object_id: "missing-var", quantity: "1", total_money: { amount: 999 } },
+              ],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    const pos: PosConfig = {
+      cards: [
+        {
+          ...blank("gate", "Gate Ticket Sales"),
+          locationIds: ["L-GATE"],
+          catalogObjectIds: ["fri", "sat", "sun", "missing"],
+          countItemIds: ["fri", "sat", "sun"],
+          countLabel: "tickets",
+        },
+      ],
+    };
+    const pulled = await pullPos({
+      config: pos,
+      state: null,
+      now: new Date("2026-10-03T20:00:00.000Z"),
+      token: "token",
+      environment: "production",
+      fetchImpl,
+    });
+    expect(pulled.cards.gate).toMatchObject({ status: "ok", cents: 4500, quantity: 4 });
   });
 
   it("does not call Square when no card is configured", async () => {

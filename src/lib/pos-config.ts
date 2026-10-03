@@ -267,11 +267,12 @@ function hasRollupCycle(cards: PosCardConfig[]): boolean {
   return cards.some((card) => walk(card.id));
 }
 
-/** Busts the Square order cache when locations or items change. */
+/** Busts the Square order cache when locations, items, or item matching change. */
 export function posFingerprint(config: PosConfig): string {
   return JSON.stringify({
     attribution: "location",
     countMatch: "category",
+    itemMatch: "variation",
     cards: config.cards.map((card) => ({
       id: card.id,
       locationIds: [...card.locationIds].sort(),
