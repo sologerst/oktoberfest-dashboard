@@ -36,8 +36,26 @@ type SquareOrder = {
 };
 type CatalogObject = {
   id?: string;
+  type?: string;
   item_data?: { variations?: { id?: string }[] };
 };
+
+/**
+ * Square order lines store a variation id. The item library copies an item id.
+ * An item id has to count every variation of that item.
+ */
+export function variationIdsByItem(objects: readonly CatalogObject[]): Map<string, string[]> {
+  const variations = new Map<string, string[]>();
+  for (const object of objects) {
+    if (!object.id || object.type !== "ITEM") continue;
+    const ids: string[] = [];
+    for (const variation of object.item_data?.variations ?? []) {
+      if (variation.id) ids.push(variation.id);
+    }
+    variations.set(object.id, ids);
+  }
+  return variations;
+}
 
 export function squareOrigin(environment: string): string {
   if (environment === "production") return "https://connect.squareup.com";
@@ -71,6 +89,7 @@ export type CardForCatalog = (locationId: string | undefined, catalogId: string)
 export function locationMembership(
   config: PosConfig,
   categoryObjects: Record<CardId, string[]>,
+  variationsByItemId: ReadonlyMap<string, readonly string[]> = new Map(),
 ): {
   cardFor: CardForCatalog;
   failed: Set<CardId>;
@@ -80,7 +99,11 @@ export function locationMembership(
     .map((card) => ({
       id: card.id,
       locations: card.locationIds,
-      catalogIds: new Set([...card.catalogObjectIds, ...(categoryObjects[card.id] ?? [])]),
+      catalogIds: new Set([
+        ...card.catalogObjectIds,
+        ...(categoryObjects[card.id] ?? []),
+        ...card.catalogObjectIds.flatMap((id) => variationsByItemId.get(id) ?? []),
+      ]),
     }));
 
   const owner = new Map<string, CardId>();
@@ -248,6 +271,7 @@ type SquareClient = {
     matched_variation_ids?: string[];
     cursor?: string;
   }>;
+  batchRetrieveCatalog(body: Record<string, unknown>): Promise<{ objects?: CatalogObject[] }>;
 };
 
 async function squareFetch<T>(
@@ -286,7 +310,43 @@ function clientFor(fetchImpl: typeof fetch, origin: string, token: string): Squa
       squareFetch(fetchImpl, origin, token, "/v2/orders/search", body),
     searchCatalogItems: (body) =>
       squareFetch(fetchImpl, origin, token, "/v2/catalog/search-catalog-items", body),
+    batchRetrieveCatalog: (body) =>
+      squareFetch(fetchImpl, origin, token, "/v2/catalog/batch-retrieve", body),
   };
+}
+
+/**
+ * Resolve pasted item ids to the variation ids that appear on order lines.
+ * A variation id is left as itself. One missing id does not drop the rest.
+ */
+async function expandItemVariations(client: SquareClient, objectIds: string[]): Promise<Map<string, string[]>> {
+  const unique = [...new Set(objectIds)];
+  if (unique.length === 0) return new Map();
+  const objects: CatalogObject[] = [];
+  let retrieved = false;
+  let lastError: unknown;
+  for (const group of chunks(unique, 1000)) {
+    try {
+      const payload = await client.batchRetrieveCatalog({ object_ids: group });
+      retrieved = true;
+      objects.push(...(payload.objects ?? []));
+    } catch (error) {
+      lastError = error;
+      for (const id of group) {
+        try {
+          const one = await client.batchRetrieveCatalog({ object_ids: [id] });
+          retrieved = true;
+          objects.push(...(one.objects ?? []));
+        } catch (oneError) {
+          lastError = oneError;
+        }
+      }
+    }
+  }
+  if (!retrieved) {
+    throw lastError instanceof Error ? lastError : new Error("Square catalog lookup failed");
+  }
+  return variationIdsByItem(objects);
 }
 
 async function expandCategory(client: SquareClient, categoryIds: string[]): Promise<string[]> {
@@ -384,12 +444,19 @@ function attemptsFrom(config: PosConfig, failed: Set<CardId>, totals: ReturnType
 }
 
 /**
- * Order lines carry variation ids. A category card that asks for a count is
- * counting that category, so every variation already included in the dollars
- * counts, not only the single id pasted into card setup.
+ * Order lines carry variation ids. A pasted item id counts every variation of
+ * that item. A category card that asks for a count includes every variation
+ * already included in the dollars, not only the single id pasted into setup.
  */
-export function countIdsForCard(card: PosConfig["cards"][number], categoryObjectIds: readonly string[]): Set<string> {
+export function countIdsForCard(
+  card: PosConfig["cards"][number],
+  categoryObjectIds: readonly string[],
+  variationsByItemId: ReadonlyMap<string, readonly string[]> = new Map(),
+): Set<string> {
   const ids = new Set(card.countItemIds);
+  for (const id of card.countItemIds) {
+    for (const variationId of variationsByItemId.get(id) ?? []) ids.add(variationId);
+  }
   if (card.countItemIds.length > 0 && card.categoryIds.length > 0 && card.catalogObjectIds.length === 0) {
     for (const id of categoryObjectIds) ids.add(id);
   }
@@ -424,9 +491,16 @@ export async function pullPos(input: {
       readiness[card.id] === "ready" ? await expandCategory(client, card.categoryIds) : [];
   }
 
-  const { cardFor, failed } = locationMembership(input.config, categoryObjects);
+  const variationsByItemId = await expandItemVariations(
+    client,
+    ready.flatMap((card) => card.catalogObjectIds),
+  );
+  const { cardFor, failed } = locationMembership(input.config, categoryObjects, variationsByItemId);
   const countIdsByCard = new Map(
-    input.config.cards.map((card) => [card.id, countIdsForCard(card, categoryObjects[card.id] ?? [])]),
+    input.config.cards.map((card) => [
+      card.id,
+      countIdsForCard(card, categoryObjects[card.id] ?? [], variationsByItemId),
+    ]),
   );
   const counting = new Set(input.config.cards.filter((card) => card.countItemIds.length > 0).map((card) => card.id));
   const sameConfig = input.state?.configFingerprint === fingerprint;

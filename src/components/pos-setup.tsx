@@ -268,8 +268,8 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   label="Item ids"
                   value={draft.items}
                   onChange={(items) => update(index, { items })}
-                  placeholder="Variation id from the Square item library"
-                  hint="One per line. The same item can be on cards for different locations. Each card counts that item only at its own locations."
+                  placeholder="Item id from the Square item library"
+                  hint="One per line. An item id includes every variation rung up on an order. A variation id counts only that variation. The same item can be on cards for different locations. Each card counts that item only at its own locations."
                 />
                 <Field
                   label="Category ids"
@@ -283,7 +283,7 @@ export function PosSetup({ initial }: { initial: PosCardConfig[] }) {
                   value={draft.countItems}
                   onChange={(countItems) => update(index, { countItems })}
                   placeholder="An item or variation id"
-                  hint="Optional. On a category card, any id here counts every item in the category. On an item card, only these ids are counted. Leave this blank to show dollars only."
+                  hint="Optional. On a category card, any id here counts every item in the category. On an item card, an item id counts each of its variations. Leave this blank to show dollars only."
                 />
                 <CountLabel value={draft.countLabel} onChange={(countLabel) => update(index, { countLabel })} />
               </div>
